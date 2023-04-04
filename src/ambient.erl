@@ -23,9 +23,8 @@ ambient(A) ->
       % TODO: Implement deadlock solver
       case lists:member({X,Y,free},A) of
         true ->
-          B = A -- [{X, Y, free}],
           PID ! {ok, Ref},
-          ambient([{X,Y,Ref} | B]);
+          ambient([{X,Y,Ref} | A -- [{X, Y, free}]]);
         false ->
           % TODO: Gotta kill em all
           PID ! {ko, Ref},
@@ -35,9 +34,8 @@ ambient(A) ->
       io:format("~p: Libero ~p ~p~n", [PID,X,Y]),
       case lists:member({X,Y,Ref},A) of
         true ->
-          B = A -- [{X, Y, Ref}],
           PID ! {ok, Ref},
-          ambient( [{X,Y,free} | B]);
+          ambient([{X,Y,free} | A -- [{X, Y, Ref}]]);
         false ->
           % How did you get here?
           % TODO: Gotta kill em all
@@ -49,6 +47,6 @@ ambient(A) ->
 main(W, H) ->
   A = [ {R,C,free} || R<-lists:seq(1,W), C<-lists:seq(1, H) ],
   PID = spawn(?MODULE, ambient, [A]),
-  io:format("Libero ~p ~n", [PID]),
+  io:format("Creato ambiente con ~p ~n", [PID]),
   register(ambient, PID)
 .
