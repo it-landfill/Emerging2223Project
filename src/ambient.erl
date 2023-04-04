@@ -27,17 +27,17 @@ ambient(A) ->
           PID ! {ok, Ref};
         false ->
           % TODO: Gotta kill em all
-          PID ! {ko, Ref}
-      end,
-      ambient(A);
+          PID ! {ko, Ref},
+          ambient(A)
+      end;
     {leave, PID, X, Y, Ref} ->
       io:format("~p: Libero ~p ~p~n", [PID,X,Y]),
       ambient(A)
   end.
-.
 
 main(W, H) ->
   A = [ {R,C,free} || R<-lists:seq(1,W), C<-lists:seq(1, H) ],
   PID = spawn(?MODULE, ambient, [A]),
+  io:format("Libero ~p ~n", [PID]),
   register(ambient, PID)
 .
