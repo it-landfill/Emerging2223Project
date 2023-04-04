@@ -12,7 +12,10 @@
 %% API
 -export([main/2]).
 
+sleep(N) -> receive after N -> ok end.
+
 friendship() ->
+	pass
 	%TODO: implement friendship
 	% mantenere 5 attori nella lista di attori, integrandone di nuovi nel caso in cui il numero scenda.
 .
@@ -30,10 +33,21 @@ state(PIDD, L) ->
 	% Aggiorna lo stato interno
 	%% Aggiorna il goal (eventualmente)
 	%% Comunica il nuovo goal a detect (eventualmente)
+	
 	receive
+		{status, X, Y, IsFree} ->
+			case lists:member({X, Y, IsFree}) of 
+				true ->
+					% No news, we already new that...
+					state(PIDD, L);
+				false ->
+					% New news, we need to gossip
+					% TODO: gossip
+					state(PIDD, [{X, Y, isFree} | [El || {Xi, Yi, _} = El <- L, Xi =/= X, Yi =/= Y]])
+				end;
 		_ ->
 			io:format("~p: Ricevuto messaggio non previsto~n", [self()]),
-			detect(PIDD, L)
+			state(PIDD, L)
 	end.
 
 detect(PIDS, X, Y, W, H, XG, YG) ->
@@ -53,26 +67,28 @@ detect(PIDS, X, Y, W, H, XG, YG) ->
 
 	case {X, Y} of
 		{XG, YG} ->
-			io:format("~p: Arrivato al goal~n", [self()]); %%TODO: Park
+			io:format("~p: Arrivato al goal~n", [self()]), %%TODO: Park
+			NX = X,
+			NY = Y;
 		{XG, _} ->
 			NX = X,
 			NY = (Y + 1) rem H;
 		{_, YG} ->
 			NX = (X + 1) rem W,
-			NY = Y;
-	end;
+			NY = Y
+	end,
 
 	io:format("~p: Spostamento in ~p, ~p~n", [self(), NX, NY]),
 
 	receive
 		{status, Ref, IsFree} ->
-			PIDS ! {status, NX, NY, IsFree},
+			PIDS ! {status, X, Y, IsFree},
 		
 			sleep(2000),
-			detect(PIDS, NX, NY, XG, YG);
+			detect(PIDS, NX, NY, W, H, XG, YG);
 		_ ->
 			io:format("~p: Ricevuto messaggio non previsto~n", [self()]),
-			detect(PIDS, X, Y, XG, YG)
+			detect(PIDS, X, Y, W, H, XG, YG)
 	end.
 
 
@@ -85,9 +101,9 @@ main(W, H) ->
 	% TODO: Check if park is free
 
 
-	PIDS = spawn(?MODULE, state, [None, []]),
+	PIDS = spawn(?MODULE, state, [none, []]),
 	PIDD = spawn(?MODULE, detect, [PIDS, X, Y, W, H, XG, YG]),
 	link(PIDS),
-	link(PIDD),
+	link(PIDD)
 	% PIDF = spawn(?MODULE, friendship, []),
 .
