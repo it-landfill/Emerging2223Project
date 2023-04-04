@@ -23,23 +23,23 @@ ambient(A) ->
       % TODO: Implement deadlock solver
       case lists:member({X,Y,free},A) of
         true ->
-          PID ! {ok, Ref},
+          PID ! {parkok, Ref},
           ambient([{X,Y,Ref} | A -- [{X, Y, free}]]);
         false ->
           % TODO: Gotta kill em all
-          PID ! {ko, Ref},
+          PID ! {parkfailed, Ref},
           ambient(A)
       end;
     {leave, PID, X, Y, Ref} ->
       io:format("~p: Libero ~p ~p~n", [PID,X,Y]),
       case lists:member({X,Y,Ref},A) of
         true ->
-          PID ! {ok, Ref},
+          PID ! {leaveok, Ref},
           ambient([{X,Y,free} | A -- [{X, Y, Ref}]]);
         false ->
           % How did you get here?
           % TODO: Gotta kill em all
-          PID ! {ko, Ref}
+          PID ! {leavefailed, Ref}
       end,
       ambient(A)
   end.
