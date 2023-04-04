@@ -16,15 +16,16 @@ ambient(A) ->
   receive
     {isFree, PID, X, Y, Ref} ->
       io:format("~p: Richiedo ~p ~p~n", [PID,X,Y]),
+      PID ! {status, Ref, lists:member({X,Y,free},A)},
       ambient(A);
     {park, PID, X, Y, Ref} ->
       io:format("~p: Parcheggio ~p ~p~n", [PID,X,Y]),
       % TODO: Implement deadlock solver
       case lists:member({X,Y,free},A) of
         true ->
-          A = A -- {X,Y,free},
-          A = [{X,Y,Ref} | A],
-          PID ! {ok, Ref};
+          B = A -- [{X, Y, free}],
+          PID ! {ok, Ref},
+          ambient([{X,Y,Ref} | B]);
         false ->
           % TODO: Gotta kill em all
           PID ! {ko, Ref},
@@ -32,6 +33,16 @@ ambient(A) ->
       end;
     {leave, PID, X, Y, Ref} ->
       io:format("~p: Libero ~p ~p~n", [PID,X,Y]),
+      case lists:member({X,Y,Ref},A) of
+        true ->
+          B = A -- [{X, Y, Ref}],
+          PID ! {ok, Ref},
+          ambient( [{X,Y,free} | B]);
+        false ->
+          % How did you get here?
+          % TODO: Gotta kill em all
+          PID ! {ko, Ref}
+      end,
       ambient(A)
   end.
 
