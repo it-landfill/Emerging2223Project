@@ -14,9 +14,24 @@
 
 ambient(A) ->
   receive
-
-    _ ->
-      io:format("Ambient not implemented~n"),
+    {isFree, PID, X, Y, Ref} ->
+      io:format("~p: Richiedo ~p ~p~n", [PID,X,Y]),
+      ambient(A);
+    {park, PID, X, Y, Ref} ->
+      io:format("~p: Parcheggio ~p ~p~n", [PID,X,Y]),
+      % TODO: Implement deadlock solver
+      case lists:member({X,Y,free},A) of
+        true ->
+          A = A -- {X,Y,free},
+          A = [{X,Y,Ref} | A],
+          PID ! {ok, Ref};
+        false ->
+          % TODO: Gotta kill em all
+          PID ! {ko, Ref}
+      end,
+      ambient(A);
+    {leave, PID, X, Y, Ref} ->
+      io:format("~p: Libero ~p ~p~n", [PID,X,Y]),
       ambient(A)
   end.
 .
