@@ -10,4 +10,62 @@
 -author("Balugani, Benetton, Crespan").
 
 %% API
--export([]).
+-export([main/0, render/1]).
+
+render(Data) ->
+  receive
+    {position, PID, X, Y} ->
+      case maps:find(PID, Data) of
+        error ->
+          NData = maps:put(PID, [X, Y, 0, 0, 0, []], Data);
+        _ ->
+          Tmp = maps:get(PID, Data),
+          NData = maps:update(PID, [X, Y, lists:nth(3, Tmp),
+            lists:nth(4, Tmp), lists:nth(5, Tmp), lists:nth(6, Tmp)], Data)
+      end,
+      PID ! ok,
+      render(NData);
+    {target, PID, X, Y} ->
+      case maps:find(PID, Data) of
+        error ->
+          NData = maps:put(PID, [0, 0, X, Y, 0, []], Data);
+        _ ->
+          Tmp = maps:get(PID, Data),
+          NData = maps:update(PID, [lists:nth(1, Tmp), lists:nth(2, Tmp),
+            X, Y, lists:nth(5, Tmp), lists:nth(6, Tmp)], Data)
+      end,
+      PID ! ok,
+      render(NData);
+    {parked, PID, X, Y, IsParked} ->
+      case maps:find(PID, Data) of
+        error ->
+          NData = maps:put(PID, [0, 0, X, Y, IsParked, []], Data);
+        _ ->
+          Tmp = maps:get(PID, Data),
+          NData = maps:update(PID, [lists:nth(1, Tmp), lists:nth(2, Tmp),
+            lists:nth(3, Tmp), lists:nth(4, Tmp), IsParked, lists:nth(6, Tmp)], Data)
+      end,
+      PID ! ok,
+      render(NData);
+    {friends, PID, PIDLIST} ->
+      case maps:find(PID, Data) of
+        error ->
+          NData = maps:put(PID, [0, 0, 0, 0, 0, PIDLIST], Data);
+        _ ->
+          Tmp = maps:get(PID, Data),
+          NData = maps:update(PID, [lists:nth(1, Tmp), lists:nth(2, Tmp),
+            lists:nth(3, Tmp), lists:nth(4, Tmp), lists:nth(5, Tmp), PIDLIST], Data)
+      end,
+      PID ! ok,
+      render(NData);
+    {data, PID} ->
+      % This call will be made by the window agent periodically
+      PID ! {ok, Data},
+      render(Data)
+  end.
+
+main() ->
+  PID = spawn(?MODULE, render, [#{}]),
+  io:format("Creato render con ~p ~n", [PID]),
+  register(render, PID)
+.
