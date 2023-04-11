@@ -10,7 +10,9 @@
 -author("Balugani, Benetton, Crespan").
 
 %% API
--export([main/0, render/1]).
+-export([main/0, render/1, logger/0]).
+
+sleep(N) -> receive after N -> ok end.
 
 render(Data) ->
   receive
@@ -64,8 +66,19 @@ render(Data) ->
       render(Data)
   end.
 
+logger() ->
+  sleep(10000),
+  io:format("Updating...~n"),
+  render ! {data, self()},
+  receive
+    {ok, Data} ->
+      io:format("~p~n", [Data]),
+      logger()
+  end.
+
 main() ->
   PID = spawn(?MODULE, render, [#{}]),
   io:format("Creato render con ~p ~n", [PID]),
-  register(render, PID)
+  register(render, PID),
+  spawn(?MODULE, logger, [])
 .
