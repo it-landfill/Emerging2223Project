@@ -10,4 +10,16 @@
 -author("Balugani, Benetton, Crespan").
 
 %% API
--export([]).
+-export([launch/0]).
+
+launch() ->
+  io:format("~p: Launching main~n", [self()]),
+  W = 10,
+  H = 10,
+  io:format("~p: Spawning ambient~n", [self()]),
+  A_PID = spawn(ambient, main, [W,H]),
+  io:format("~p: Ambient PID: ~p~n", [self(), A_PID]),
+  io:format("~p: Spawning car~n", [self()]),
+  C_PID = spawn(car, main, [W, H]),
+  io:format("~p: Car PID: ~p~n", [self(), C_PID])
+.
