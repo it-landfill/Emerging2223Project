@@ -21,5 +21,6 @@ launch() ->
   io:format("~p: Ambient PID: ~p~n", [self(), A_PID]),
   io:format("~p: Spawning car~n", [self()]),
   C_PID = spawn(car, main, [W, H]),
-  io:format("~p: Car PID: ~p~n", [self(), C_PID])
+  io:format("~p: Car PID: ~p~n", [self(), C_PID]),
+  spawn(render, main, [W,H])
 .

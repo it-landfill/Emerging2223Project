@@ -26,7 +26,7 @@ window(H, W, Elem, PrevData)->
     _ -> Grid = Elem
   end,
   wxGrid:clearGrid(Grid),
-  maps:foreach(fun(K, V) -> wxGrid:setCellBackgroundColour(Grid, lists:nth(1, V), lists:nth(2,V), ?wxWHITE),
+  maps:foreach(fun(_, V) -> wxGrid:setCellBackgroundColour(Grid, lists:nth(1, V), lists:nth(2,V), ?wxWHITE),
                             wxGrid:setCellBackgroundColour(Grid, lists:nth(3, V), lists:nth(4,V), ?wxWHITE) end, PrevData),
   render ! {data, self()},
   receive
