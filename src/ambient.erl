@@ -10,7 +10,7 @@
 -author("Balugani, Benetton, Crespan").
 
 %% API
--export([main/2, ambient/1]).
+-export([main/3, ambient/1]).
 
 ambient(A) ->
     receive
@@ -31,7 +31,8 @@ ambient(A) ->
                     ambient(A)
             end;
         {leave, PID, Ref} ->
-            Elem = lists:keyfind(Ref, 3, A), % Finds in the list A the touple that has as third element Ref.
+            % Finds in the list A the touple that has as third element Ref.
+            Elem = lists:keyfind(Ref, 3, A),
             case Elem of
                 {X, Y, Ref} ->
                     io:format("~p: Libero ~p ~p | ~p~n", [PID, X, Y, Ref]),
@@ -45,8 +46,9 @@ ambient(A) ->
             ambient(A)
     end.
 
-main(W, H) ->
+main(W, H, PIDMain) ->
     A = [{R, C, free} || R <- lists:seq(1, W), C <- lists:seq(1, H)],
     PID = spawn(?MODULE, ambient, [A]),
     io:format("Creato ambiente con ~p ~n", [PID]),
-    register(ambient, PID).
+    register(ambient, PID),
+    PIDMain ! {ambientOK}.
