@@ -100,6 +100,7 @@ detect(PIDM, X, Y, W, H, XG, YG) ->
         {status, Ref, IsFree} ->
           PIDS ! {status, X, Y, IsFree},
           sleep(2000),
+          render ! {position, self(), NX, NY},
           detect(PIDM, NX, NY, W, H, XG, YG);
         _ ->
           io:format("~p: Ricevuto messaggio non previsto~n", [self()]),
