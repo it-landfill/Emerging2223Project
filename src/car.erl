@@ -114,17 +114,14 @@ memory(PIDS, PIDD, PIDF) ->
   % Memorizza e mantiene nel suo stato i PID di State, Detect e Friendship, rendendoli
   % disponibili a tutti i componenti del veicolo.
   receive
-    {s_pids, Pid, Ref, Value} ->
-      io:format("~p: Ricevuto messaggio s_pids ~p~n", [self(), PIDS]),
-      Pid ! {ok, Ref},
+    {s_pids, Value} ->
+      io:format("~p: Ricevuto messaggio s_pids ~p~n", [self(), Value]),
       memory(Value, PIDD, PIDF);
-    {s_pidd, Pid, Ref, Value} ->
-      io:format("~p: Ricevuto messaggio s_pidd ~p~n", [self(), PIDD]),
-      Pid ! {ok, Ref},
+    {s_pidd, Value} ->
+      io:format("~p: Ricevuto messaggio s_pidd ~p~n", [self(), Value]),
       memory(PIDS, Value, PIDF);
-    {s_pidf, Pid, Ref, Value} ->
-      io:format("~p: Ricevuto messaggio s_pidf ~p~n", [self(), PIDF]),
-      Pid ! {ok, Ref},
+    {s_pidf, Value} ->
+      io:format("~p: Ricevuto messaggio s_pidf ~p~n", [self(), Value]),
       memory(PIDS, PIDD, Value);
     {g_pids, Pid, Ref} ->
       io:format("~p: Ricevuto messaggio g_pids ~p~n", [self(), PIDS]),
@@ -156,10 +153,10 @@ main(W, H) ->
 
   % Spawn actors
   PIDS = spawn(?MODULE, state, [PIDM, []]),
-  PIDM ! {s_pids, self(), make_ref(), PIDS},
+  PIDM ! {s_pids, PIDS},
   PIDD = spawn(?MODULE, detect, [PIDM, X, Y, W, H, XG, YG]),
-  PIDM ! {s_pidd, self(), make_ref(), PIDD},
+  PIDM ! {s_pidd, PIDD},
   io:format("~p: Generato detect(~p) e state(~p) ~n", [self(), PIDD, PIDS])
 % PIDF = spawn(?MODULE, friendship, []),
-% PIDM ! {s_pidf, self(), make_ref(), PIDF},
+% PIDM ! {s_pidf, PIDF},
 .
