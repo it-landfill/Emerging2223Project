@@ -101,6 +101,7 @@ detect(PIDM, X, Y, W, H, XG, YG) ->
           PIDS ! {status, X, Y, IsFree},
           sleep(2000),
           render ! {position, self(), NX, NY},
+          render ! {target, self(), XG, YG}, % TODO: Render target only if changed
           detect(PIDM, NX, NY, W, H, XG, YG);
         _ ->
           io:format("~p: Ricevuto messaggio non previsto~n", [self()]),
@@ -140,11 +141,11 @@ memory(PIDS, PIDD, PIDF) ->
 
 
 main(W, H) ->
-  X = rand:uniform(W),
-  Y = rand:uniform(H),
+  X = rand:uniform(W-1),
+  Y = rand:uniform(H-1),
   % TODO: Define goal parking
-  XG = 1,
-  YG = 1,
+  XG = rand:uniform(W-1),
+  YG = rand:uniform(H-1),
   % TODO: Check if park is free
   io:format("~p: Coordinate di partenza: ~p,~p~n", [self(), X, Y]),
   io:format("~p: Target: ~p,~p~n", [self(), XG, YG]),
