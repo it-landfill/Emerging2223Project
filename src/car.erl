@@ -17,10 +17,21 @@ sleep(N) ->
     after N -> ok
     end.
 
-friendship() ->
+friendship(PIDM, L) when length(L)>=5 ->
     pass
-%TODO: implement friendship
-% mantenere 5 attori nella lista di attori, integrandone di nuovi nel caso in cui il numero scenda.
+;
+friendship(PIDM, L) when length(L)<5 and length(L)>0->
+
+    pass
+;
+friendship(PIDM, L) when length(L)=:=0 ->
+    % Chiama WellKnown e fatti passare un contatto
+    Ref = make_ref(),
+    wellknown ! {get, Ref, self()},
+    receive
+        {ok, Ref, Friend} -> friendship(PIDM, [Friend|L]);
+        {ko, Ref} -> sleep(1000), friendship(PIDM, L)
+    end
 .
 
 state(PIDM, L) ->
