@@ -2,6 +2,18 @@
 Emerging Programming Languages 20223/2023 Project Specification
 (in Italian Only). Version 1.1.
 
+- [Emerging2223Project](#emerging2223project)
+	- [CHANGELOG](#changelog)
+	- [Descrizione del problema](#descrizione-del-problema)
+	- [Il sistema di attori](#il-sistema-di-attori)
+	- [Protocolli pubblici](#protocolli-pubblici)
+		- [Protocollo per la Friendship](#protocollo-per-la-friendship)
+		- [Protocolli per la Detection e il Parcheggio](#protocolli-per-la-detection-e-il-parcheggio)
+		- [Protocollo di Gossiping](#protocollo-di-gossiping)
+	- [Il Main del progetto](#il-main-del-progetto)
+	- [Debugging: attore `render`](#debugging-attore-render)
+
+
 ## CHANGELOG
 
 - Version 1.1
