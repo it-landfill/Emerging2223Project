@@ -10,7 +10,7 @@
 -author("Balugani, Benetton, Crespan").
 
 %% API
--export([main/2, memory/3, state/2, detect/8, friendship/2]).
+-export([main/2, memory/3, state/5, detect/8, friendship/2]).
 
 sleep(N) ->
     receive
@@ -112,7 +112,7 @@ friendship(PIDM, L) ->
     sleep(2000),
     friendship(PIDM, lists:flatten(pingFriends(L))).
 
-state(PIDM, L) ->
+state(PIDM, PIDD, L, XG, YG) ->
     % TODO: implement state
     % mantenere il modello interno dell'ambiente e le coordinate del posteggio obiettivo.
     % registra per ogni cella l'ultima informazione giunta in suo possesso (posteggio libero/occupato/nessuna informazione)
@@ -127,49 +127,80 @@ state(PIDM, L) ->
     %% Comunica il nuovo goal a detect (eventualmente)
 
     io:format("~p: State~n", [self()]),
-    RefD = make_ref(),
-    PIDM ! {g_pidd, self(), RefD},
-    receive
-        {get_pidd, PIDD, RefD} ->
+
+    % ---- Resolve PIDD ----
+    case PIDD of
+        none ->
+            RefD = make_ref(),
+            PIDM ! {g_pidd, self(), RefD},
             receive
-                {status, X, Y, IsFree} ->
-                    case lists:member({X, Y, IsFree}, L) of
-                        true ->
-                            % No news, we already new that...
-                            state(PIDM, L);
-                        false ->
-                            % New news, we need to gossip
-                            % TODO: gossip
-                            state(PIDM, [
-                                {X, Y, isFree} | [El || {Xi, Yi, _} = El <- L, Xi =/= X, Yi =/= Y]
-                            ])
-                    end;
-                _ ->
-                    io:format("~p: Ricevuto messaggio non previsto~n", [self()]),
-                    state(PIDM, L)
-            end
+                {get_pidd, PIDD1, RefD} ->
+                    state(PIDM, PIDD1, L, XG, YG);
+                _ = Msg ->
+                    io:format("~p: Ricevuto messaggio non previsto: ~p~n", [self(), Msg]),
+                    self() ! Msg,
+                    % TODO: Is this tail recursion?
+                    state(PIDM, PIDD, L, XG, YG)
+            end;
+        _ ->
+            pass
+    end,
+
+    receive
+        {status, X, Y, IsFree} ->
+            case lists:member({X, Y, IsFree}, L) of
+                true ->
+                    % No news, we already new that...
+                    state(PIDM, PIDD, L, XG, YG);
+                false ->
+                    % New news, we need to gossip
+                    % ---- Check if message concerns goal ----
+                    case {X =:= XG, Y =:= YG} of
+                        {true, true} ->
+                            % ---- Goal is now occupied ----
+                            PIDD ! {newGoal};
+                        _ ->
+                            pass
+                    end,
+
+                    % TODO: gossip
+                    state(
+                        PIDM,
+                        PIDD,
+                        [
+                            {X, Y, isFree} | [El || {Xi, Yi, _} = El <- L, Xi =/= X, Yi =/= Y]
+                        ],
+                        XG,
+                        YG
+                    )
+            end;
+        {newGoal, X, Y} ->
+            state(PIDM, PIDD, L, X, Y);
+        _ ->
+            io:format("~p: Ricevuto messaggio non previsto~n", [self()]),
+            state(PIDM, PIDD, L, XG, YG)
     end.
 
 move(X, Y, W, H, XG, YG) ->
-	% ---- Move ----
+    % ---- Move ----
     case {X =:= XG, Y =:= YG} of
         {true, true} ->
             %%TODO: Park
             io:format("~p: Arrivato al goal~n", [self()]),
-			{X, Y};
+            {X, Y};
         {false, false} ->
             case rand:uniform(2) of
                 1 ->
                     case Y > YG of
                         true ->
-							{X, (Y - 1) rem H};
+                            {X, (Y - 1) rem H};
                         false ->
-							{X, (Y + 1) rem H}
+                            {X, (Y + 1) rem H}
                     end;
                 2 ->
                     case X > XG of
                         true ->
-							{(X - 1) rem W, Y};
+                            {(X - 1) rem W, Y};
                         false ->
                             {(X + 1) rem W, Y}
                     end
@@ -177,19 +208,19 @@ move(X, Y, W, H, XG, YG) ->
         {true, false} ->
             case Y > YG of
                 true ->
-					{X, (Y - 1) rem H};
+                    {X, (Y - 1) rem H};
                 false ->
-                   {X, (Y + 1) rem H}
+                    {X, (Y + 1) rem H}
             end;
         {false, true} ->
             case X > XG of
                 true ->
-					{(X - 1) rem W, Y};
+                    {(X - 1) rem W, Y};
                 false ->
-					{(X + 1) rem W, Y}
+                    {(X + 1) rem W, Y}
             end
     end.
-	
+
 detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
     % TODO: implement detect
     % muovere l'automobile sulla scacchiera
@@ -204,26 +235,28 @@ detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
 
     io:format("~p: Detect~n", [self()]),
 
-	% ---- Resolve PIDS ----
+    % ---- Resolve PIDS ----
     case PIDS of
         none ->
             RefS = make_ref(),
             PIDM ! {g_pids, self(), RefS},
             receive
                 {get_pids, PIDS1, RefS} ->
-					detect(PIDM, PIDS1, X, Y, W, H, XG, YG);
+                    detect(PIDM, PIDS1, X, Y, W, H, XG, YG);
                 _ = Msg ->
                     io:format("~p: Ricevuto messaggio non previsto: ~p~n", [self(), Msg]),
-					self() ! Msg,
-                    detect(PIDM, PIDS, X, Y, W, H, XG, YG) % TODO: Is this tail recursion?
+                    self() ! Msg,
+                    % TODO: Is this tail recursion?
+                    detect(PIDM, PIDS, X, Y, W, H, XG, YG)
             end;
-		_ -> pass
+        _ ->
+            pass
     end,
 
-	{NX, NY} = move(X, Y, W, H, XG, YG),
+    {NX, NY} = move(X, Y, W, H, XG, YG),
     io:format("~p: Spostamento in ~p, ~p~n", [self(), NX, NY]),
 
-	% ---- Communicate ----
+    % ---- Communicate ----
     Ref = make_ref(),
     ambient ! {isFree, self(), X, Y, Ref},
     receive
@@ -234,6 +267,12 @@ detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
             % TODO: Render target only if changed
             render ! {target, self(), XG, YG},
             detect(PIDM, PIDS, NX, NY, W, H, XG, YG);
+        {newGoal} ->
+            {NX, NY} = newCoordinates(W, H),
+            io:format("~p: Nuovo obiettivo: (~p,~p)~n", [self(), NX, NY]),
+            % TODO: Should I check if newGoal is free?
+            PIDS ! {newGoal, NX, NY},
+            detect(PIDM, PIDS, X, Y, W, H, NX, NY);
         _ ->
             io:format("~p: Ricevuto messaggio non previsto~n", [self()]),
             detect(PIDM, PIDS, X, Y, W, H, XG, YG)
@@ -266,13 +305,12 @@ memory(PIDS, PIDD, PIDF) ->
             memory(PIDS, PIDD, PIDF)
     end.
 
+newCoordinates(W, H) ->
+    {rand:uniform(W) - 1, rand:uniform(H) - 1}.
+
 main(W, H) ->
-    X = rand:uniform(W) - 1,
-    Y = rand:uniform(H) - 1,
-    % TODO: Define goal parking
-    XG = rand:uniform(W) - 1,
-    YG = rand:uniform(H) - 1,
-    % TODO: Check if park is free
+    {X, Y} = newCoordinates(W, H),
+    {XG, YG} = newCoordinates(W, H),
     io:format("~p: Coordinate di partenza: ~p,~p~n", [self(), X, Y]),
     io:format("~p: Target: ~p,~p~n", [self(), XG, YG]),
 
@@ -280,11 +318,12 @@ main(W, H) ->
     PIDM = spawn(?MODULE, memory, [none, none, none]),
 
     % Spawn actors
-    PIDS = spawn(?MODULE, state, [PIDM, []]),
+    PIDS = spawn(?MODULE, state, [PIDM, none, [], XG, YG]),
     PIDM ! {s_pids, PIDS},
     PIDD = spawn(?MODULE, detect, [PIDM, none, X, Y, W, H, XG, YG]),
     PIDM ! {s_pidd, PIDD},
-    PIDF = none, %spawn(?MODULE, friendship, []),
+    %spawn(?MODULE, friendship, []),
+    PIDF = none,
     %PIDM ! {s_pidf, PIDF},
     io:format("~p: Generato detect(~p), state(~p), friendship(~p), memory(~p) ~n", [
         self(), PIDD, PIDS, PIDF, PIDM
