@@ -10,7 +10,7 @@
 -author("Balugani, Benetton, Crespan").
 
 %% API
--export([main/2, memory/3, state/2, detect/7, friendship/2]).
+-export([main/2, memory/3, state/2, detect/8, friendship/2]).
 
 sleep(N) ->
     receive
@@ -22,6 +22,7 @@ findFriends(_, []) ->
     [];
 findFriends(PIDS, [H | T]) ->
     Ref = make_ref(),
+    % FIXME: H is a state PID!!!
     H ! {getFriends, self(), PIDS, Ref},
     receive
         {myFriends, L, Ref} ->
@@ -35,7 +36,7 @@ findFriends(PIDS, [H | T]) ->
 pickFriends(_, 0) ->
     [];
 pickFriends([], _) ->
-	[];
+    [];
 pickFriends(L, N) ->
     Rand = lists:nth(rand:uniform(length(L)), L),
     [Rand | pickFriends([El || El <- L, El =/= Rand], N - 1)].
@@ -60,7 +61,7 @@ friendship(PIDM, L) when length(L) =:= 0 ->
     RefD = make_ref(),
     PIDM ! {g_pids, self(), RefD},
     receive
-        {ok, PIDS, RefD} ->
+        {get_pids, PIDS, RefD} ->
             Ref2 = make_ref(),
             wellknown ! {getFriends, self(), PIDS, Ref2},
             receive
@@ -69,11 +70,13 @@ friendship(PIDM, L) when length(L) =:= 0 ->
                     case List2 =:= [] of
                         true ->
                             % Non ho ricevuto nessun contatto, riprovo tra 2 secondi
+
+                            % TODO: Random delay?
                             sleep(2000),
                             friendship(PIDM, L);
                         false ->
                             % Ho ricevuto un contatto, lo aggiungo alla lista
-                            friendship(PIDM, [lists:nth(rand:uniform(length(List2)), List2) | L])
+                            friendship(PIDM, [lists:nth(rand:uniform(length(List2)), List2)])
                     end
             end
     end;
@@ -82,7 +85,7 @@ friendship(PIDM, L) when length(L) < 5, length(L) > 0 ->
     RefD = make_ref(),
     PIDM ! {g_pids, self(), RefD},
     receive
-        {ok, PIDS, RefD} ->
+        {get_pids, PIDS, RefD} ->
             PIDLIST = lists:flatten(findFriends(PIDS, L)),
             List2 = [El || El <- PIDLIST, El =/= PIDS],
             Needed = 5 - length(L),
@@ -97,9 +100,9 @@ friendship(PIDM, L) when length(L) < 5, length(L) > 0 ->
                             friendship(PIDM, L);
                         false ->
                             % Prendi n elementi randomici dalla list
-							NewFriends = lists:flatten([L, pickFriends(List2, Needed)]),
-							%TODO: Check if I already have them
-							%TODO: If they are less than Needed, resort to WellKnown
+                            NewFriends = lists:flatten([L, pickFriends(List2, Needed)]),
+                            %TODO: Check if I already have them
+                            %TODO: If they are less than Needed, resort to WellKnown
                             friendship(PIDM, NewFriends)
                     end
             end
@@ -127,7 +130,7 @@ state(PIDM, L) ->
     RefD = make_ref(),
     PIDM ! {g_pidd, self(), RefD},
     receive
-        {ok, PIDD, RefD} ->
+        {get_pidd, PIDD, RefD} ->
             receive
                 {status, X, Y, IsFree} ->
                     case lists:member({X, Y, IsFree}, L) of
@@ -147,7 +150,47 @@ state(PIDM, L) ->
             end
     end.
 
-detect(PIDM, X, Y, W, H, XG, YG) ->
+move(X, Y, W, H, XG, YG) ->
+	% ---- Move ----
+    case {X =:= XG, Y =:= YG} of
+        {true, true} ->
+            %%TODO: Park
+            io:format("~p: Arrivato al goal~n", [self()]),
+			{X, Y};
+        {false, false} ->
+            case rand:uniform(2) of
+                1 ->
+                    case Y > YG of
+                        true ->
+							{X, (Y - 1) rem H};
+                        false ->
+							{X, (Y + 1) rem H}
+                    end;
+                2 ->
+                    case X > XG of
+                        true ->
+							{(X - 1) rem W, Y};
+                        false ->
+                            {(X + 1) rem W, Y}
+                    end
+            end;
+        {true, false} ->
+            case Y > YG of
+                true ->
+					{X, (Y - 1) rem H};
+                false ->
+                   {X, (Y + 1) rem H}
+            end;
+        {false, true} ->
+            case X > XG of
+                true ->
+					{(X - 1) rem W, Y};
+                false ->
+					{(X + 1) rem W, Y}
+            end
+    end.
+	
+detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
     % TODO: implement detect
     % muovere l'automobile sulla scacchiera
     % interagendo con l'attore "ambient" per fare sensing dello stato di occupazione dei posteggi.
@@ -161,72 +204,39 @@ detect(PIDM, X, Y, W, H, XG, YG) ->
 
     io:format("~p: Detect~n", [self()]),
 
-    case {X =:= XG, Y =:= YG} of
-        {true, true} ->
-            %%TODO: Park
-            io:format("~p: Arrivato al goal~n", [self()]),
-            NX = X,
-            NY = Y;
-        {false, false} ->
-            case rand:uniform(2) of
-                1 ->
-                    NX = X,
-                    case Y > YG of
-                        true ->
-                            NY = (Y - 1) rem H;
-                        false ->
-                            NY = (Y + 1) rem H
-                    end;
-                2 ->
-                    NY = Y,
-                    case X > XG of
-                        true ->
-                            NX = (X - 1) rem W;
-                        false ->
-                            NX = (X + 1) rem W
-                    end
+	% ---- Resolve PIDS ----
+    case PIDS of
+        none ->
+            RefS = make_ref(),
+            PIDM ! {g_pids, self(), RefS},
+            receive
+                {get_pids, PIDS1, RefS} ->
+					detect(PIDM, PIDS1, X, Y, W, H, XG, YG);
+                _ = Msg ->
+                    io:format("~p: Ricevuto messaggio non previsto: ~p~n", [self(), Msg]),
+					self() ! Msg,
+                    detect(PIDM, PIDS, X, Y, W, H, XG, YG) % TODO: Is this tail recursion?
             end;
-        {true, false} ->
-            NX = X,
-            case Y > YG of
-                true ->
-                    NY = (Y - 1) rem H;
-                false ->
-                    NY = (Y + 1) rem H
-            end;
-        {false, true} ->
-            NY = Y,
-            case X > XG of
-                true ->
-                    NX = (X - 1) rem W;
-                false ->
-                    NX = (X + 1) rem W
-            end
+		_ -> pass
     end,
 
+	{NX, NY} = move(X, Y, W, H, XG, YG),
     io:format("~p: Spostamento in ~p, ~p~n", [self(), NX, NY]),
 
-    RefS = make_ref(),
-    PIDM ! {g_pids, self(), RefS},
+	% ---- Communicate ----
+    Ref = make_ref(),
+    ambient ! {isFree, self(), X, Y, Ref},
     receive
-        {ok, PIDS, RefS} ->
-            Ref = make_ref(),
-            ambient ! {isFree, self(), X, Y, Ref},
-            receive
-                {status, Ref, IsFree} ->
-                    PIDS ! {status, X, Y, IsFree},
-                    sleep(2000),
-                    render ! {position, self(), NX, NY},
-                    % TODO: Render target only if changed
-                    render ! {target, self(), XG, YG},
-                    detect(PIDM, NX, NY, W, H, XG, YG);
-                _ ->
-                    io:format("~p: Ricevuto messaggio non previsto~n", [self()]),
-                    detect(PIDM, X, Y, W, H, XG, YG)
-            end;
-        _ = Msg ->
-            io:format("~p: Ricevuto messaggio non previsto: ~p~n", [self(), Msg]),
-            detect(PIDM, X, Y, W, H, XG, YG)
+        {status, Ref, IsFree} ->
+            PIDS ! {status, X, Y, IsFree},
+            sleep(2000),
+            render ! {position, self(), NX, NY},
+            % TODO: Render target only if changed
+            render ! {target, self(), XG, YG},
+            detect(PIDM, PIDS, NX, NY, W, H, XG, YG);
+        _ ->
+            io:format("~p: Ricevuto messaggio non previsto~n", [self()]),
+            detect(PIDM, PIDS, X, Y, W, H, XG, YG)
     end.
 
 memory(PIDS, PIDD, PIDF) ->
@@ -244,15 +254,15 @@ memory(PIDS, PIDD, PIDF) ->
             memory(PIDS, PIDD, Value);
         {g_pids, Pid, Ref} ->
             io:format("~p: Ricevuto messaggio g_pids ~p~n", [self(), PIDS]),
-            Pid ! {ok, PIDS, Ref},
+            Pid ! {get_pids, PIDS, Ref},
             memory(PIDS, PIDD, PIDF);
         {g_pidd, Pid, Ref} ->
             io:format("~p: Ricevuto messaggio g_pidd ~p~n", [self(), PIDD]),
-            Pid ! {ok, PIDD, Ref},
+            Pid ! {get_pidd, PIDD, Ref},
             memory(PIDS, PIDD, PIDF);
         {g_pidf, Pid, Ref} ->
             io:format("~p: Ricevuto messaggio g_pidf ~p~n", [self(), PIDF]),
-            Pid ! {ok, PIDF, Ref},
+            Pid ! {get_pidf, PIDF, Ref},
             memory(PIDS, PIDD, PIDF)
     end.
 
@@ -272,9 +282,10 @@ main(W, H) ->
     % Spawn actors
     PIDS = spawn(?MODULE, state, [PIDM, []]),
     PIDM ! {s_pids, PIDS},
-    PIDD = spawn(?MODULE, detect, [PIDM, X, Y, W, H, XG, YG]),
+    PIDD = spawn(?MODULE, detect, [PIDM, none, X, Y, W, H, XG, YG]),
     PIDM ! {s_pidd, PIDD},
-    io:format("~p: Generato detect(~p) e state(~p) ~n", [self(), PIDD, PIDS])
-% PIDF = spawn(?MODULE, friendship, []),
-% PIDM ! {s_pidf, PIDF},
-.
+    PIDF = none, %spawn(?MODULE, friendship, []),
+    %PIDM ! {s_pidf, PIDF},
+    io:format("~p: Generato detect(~p), state(~p), friendship(~p), memory(~p) ~n", [
+        self(), PIDD, PIDS, PIDF, PIDM
+    ]).
