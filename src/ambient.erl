@@ -15,19 +15,19 @@
 ambient(A) ->
     receive
         {isFree, PID, X, Y, Ref} ->
-            io:format("~p: Richiedo ~p ~p~n", [PID, X, Y]),
+            io:format("~p: Richiedo ~p (~p,~p) | ~p~n", [self(), PID, X, Y, Ref]),
             PID ! {status, Ref, lists:member({X, Y, free}, A)},
             ambient(A);
         {park, PID, X, Y, Ref} ->
-            io:format("~p: Parcheggio ~p ~p~n", [PID, X, Y]),
+            io:format("~p: Parcheggio ~p (~p,~p) | ~p~n", [self(), PID, X, Y, Ref]),
             % TODO: Implement deadlock solver
             case lists:member({X, Y, free}, A) of
                 true ->
-                    PID ! {parkok, Ref},
+                    PID ! {parkOk, Ref},
                     ambient([{X, Y, Ref} | A -- [{X, Y, free}]]);
                 false ->
                     % TODO: Gotta kill em all
-                    PID ! {parkfailed, Ref},
+                    PID ! {parkFailed, Ref},
                     ambient(A)
             end;
         {leave, PID, Ref} ->
@@ -35,13 +35,13 @@ ambient(A) ->
             Elem = lists:keyfind(Ref, 3, A),
             case Elem of
                 {X, Y, Ref} ->
-                    io:format("~p: Libero ~p ~p | ~p~n", [PID, X, Y, Ref]),
-                    PID ! {leaveok, Ref},
+                    io:format("~p: Libero ~p (~p,~p) | ~p~n", [self(), PID, X, Y, Ref]),
+                    PID ! {leaveOk, Ref},
                     ambient([{X, Y, free} | A -- [Elem]]);
                 false ->
                     % How did you get here?
                     % TODO: Gotta kill em all
-                    PID ! {leavefailed, Ref}
+                    PID ! {leaveFailed, Ref}
             end,
             ambient(A)
     end.

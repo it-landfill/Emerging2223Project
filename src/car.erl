@@ -155,8 +155,8 @@ state(PIDM, PIDD, L, XG, YG) ->
                 false ->
                     % New news, we need to gossip
                     % ---- Check if message concerns goal ----
-                    case {X =:= XG, Y =:= YG} of
-                        {true, true} ->
+                    case {X =:= XG, Y =:= YG, IsFree} of
+                        {true, true, false} ->
                             % ---- Goal is now occupied ----
                             PIDD ! {newGoal};
                         _ ->
@@ -183,9 +183,9 @@ state(PIDM, PIDD, L, XG, YG) ->
 
 move(X, Y, W, H, XG, YG) ->
     % ---- Move ----
+	% TODO: Pacman effect
     case {X =:= XG, Y =:= YG} of
         {true, true} ->
-            %%TODO: Park
             io:format("~p: Arrivato al goal~n", [self()]),
             {X, Y};
         {false, false} ->
@@ -244,7 +244,7 @@ detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
                 {get_pids, PIDS1, RefS} ->
                     detect(PIDM, PIDS1, X, Y, W, H, XG, YG);
                 _ = Msg ->
-                    io:format("~p: Ricevuto messaggio non previsto: ~p~n", [self(), Msg]),
+                    io:format("~p: Ricevuto messaggio non previsto in risoluzione di PIDS: ~p~n", [self(), Msg]),
                     self() ! Msg,
                     % TODO: Is this tail recursion?
                     detect(PIDM, PIDS, X, Y, W, H, XG, YG)
@@ -253,28 +253,64 @@ detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
             pass
     end,
 
-    {NX, NY} = move(X, Y, W, H, XG, YG),
-    io:format("~p: Spostamento in ~p, ~p~n", [self(), NX, NY]),
-
     % ---- Communicate ----
     Ref = make_ref(),
     ambient ! {isFree, self(), X, Y, Ref},
     receive
-        {status, Ref, IsFree} ->
+        {status, Ref, IsFree} = Ajeje->
+			 io:format("~p: Resp ~p~n", [self(), Ajeje]),
             PIDS ! {status, X, Y, IsFree},
-            sleep(2000),
-            render ! {position, self(), NX, NY},
-            % TODO: Render target only if changed
-            render ! {target, self(), XG, YG},
-            detect(PIDM, PIDS, NX, NY, W, H, XG, YG);
+
+            case {X =:= XG, Y =:= YG, IsFree} of
+                % Sono al goal ed è libero
+                {true, true, true} ->
+                    RefP = make_ref(),
+                    ambient ! {park, self(), X, Y, RefP},
+                    receive
+                        % Parcheggio riuscito
+                        {parkOk, RefP} ->
+                            io:format("~p: Parcheggio riuscito~n", [self()]),
+                            % render ! {parked, self(), X, Y, true}, % FIXME: CRASH HERE
+                            sleep((rand:uniform(4) + 1) * 1000);
+                        % Parcheggio fallito
+                        {parkFailed, RefP} ->
+                            io:format("~p: Parcheggio fallito~n", [self()])
+                        % TODO: Time to die
+                    end,
+                    ambient ! {leave, self(), RefP},
+                    receive
+                        % Parcheggio riuscito
+                        {leaveOk, RefP} ->
+                            io:format("~p: Parcheggio liberato con successo~n", [self()]);
+                            % render ! {parked, self(), X, Y, false}; 
+                        % Parcheggio fallito
+                        {leaveFailed, RefP} ->
+                            io:format("~p: Errore in liberamento del parcheggio~n", [self()])
+                        % TODO: Time to die
+                    end,
+                    self() ! {newGoal},
+                    detect(PIDM, PIDS, X, Y, W, H, XG, YG);
+                _ ->
+                    sleep(2000),
+					{NX, NY} = move(X, Y, W, H, XG, YG),
+    				io:format("~p: Spostamento in: (~p,~p)~n", [self(), NX, NY]),
+                    render ! {position, self(), NX, NY},
+                    detect(PIDM, PIDS, NX, NY, W, H, XG, YG)
+            end;
         {newGoal} ->
-            {NX, NY} = newCoordinates(W, H),
-            io:format("~p: Nuovo obiettivo: (~p,~p)~n", [self(), NX, NY]),
+            {NXG, NYG} = newCoordinates(W, H),
+            io:format("~p: Nuovo obiettivo: (~p,~p)~n", [self(), NXG, NYG]),
             % TODO: Should I check if newGoal is free?
-            PIDS ! {newGoal, NX, NY},
-            detect(PIDM, PIDS, X, Y, W, H, NX, NY);
-        _ ->
-            io:format("~p: Ricevuto messaggio non previsto~n", [self()]),
+            PIDS ! {newGoal, NXG, NYG},
+            render ! {target, self(), NXG, NYG},
+			% Flush inbox
+			receive
+				{status, _, _} = MsgFlush -> 
+					io:format("~p: Flush msg ~p~n", [self(), MsgFlush])
+			end,
+            detect(PIDM, PIDS, X, Y, W, H, NXG, NYG);
+        _ = Msg1 ->
+            io:format("~p: Ricevuto messaggio non previsto: ~p~n", [self(), Msg1]),
             detect(PIDM, PIDS, X, Y, W, H, XG, YG)
     end.
 
@@ -325,6 +361,8 @@ main(W, H) ->
     %spawn(?MODULE, friendship, []),
     PIDF = none,
     %PIDM ! {s_pidf, PIDF},
+    render ! {position, PIDD,X, Y},
+    render ! {target, PIDD, XG, YG},
     io:format("~p: Generato detect(~p), state(~p), friendship(~p), memory(~p) ~n", [
         self(), PIDD, PIDS, PIDF, PIDM
     ]).
