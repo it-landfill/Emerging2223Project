@@ -270,7 +270,7 @@ detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
                         % Parcheggio riuscito
                         {parkOk, RefP} ->
                             io:format("~p: Parcheggio riuscito~n", [self()]),
-                            % render ! {parked, self(), X, Y, true}, % FIXME: CRASH HERE
+                            render ! {parked, self(), X, Y, 1}, % FIXME: CRASH HERE
                             sleep((rand:uniform(4) + 1) * 1000);
                         % Parcheggio fallito
                         {parkFailed, RefP} ->
@@ -281,8 +281,8 @@ detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
                     receive
                         % Parcheggio riuscito
                         {leaveOk, RefP} ->
-                            io:format("~p: Parcheggio liberato con successo~n", [self()]);
-                            % render ! {parked, self(), X, Y, false}; 
+                            io:format("~p: Parcheggio liberato con successo~n", [self()]),
+                            render ! {parked, self(), X, Y, 0};
                         % Parcheggio fallito
                         {leaveFailed, RefP} ->
                             io:format("~p: Errore in liberamento del parcheggio~n", [self()])

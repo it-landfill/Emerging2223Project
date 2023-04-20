@@ -41,7 +41,7 @@ window(H, W, Elem, PrevData)->
         end
                    end,
         Data),
-      sleep(2000),
+      sleep(500),
       window(H, W, Grid, Data);
     _ -> window(H, W, Grid, PrevData)
   end.
