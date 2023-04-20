@@ -112,7 +112,7 @@ friendship(PIDM, L) ->
   sleep(2000),
   friendship(PIDM, lists:flatten(pingFriends(L))).
 
-state(PIDM, PIDD, L, XG, YG) when PIDD =:= none ->
+state(PIDM, none, L, XG, YG) ->
   RefD = make_ref(),
   PIDM ! {g_pidd, self(), RefD},
   receive
@@ -121,8 +121,7 @@ state(PIDM, PIDD, L, XG, YG) when PIDD =:= none ->
     _ = Msg ->
       io:format("~p: Ricevuto messaggio non previsto: ~p~n", [self(), Msg]),
       self() ! Msg,
-      % TODO: Is this tail recursion?
-      state(PIDM, PIDD, L, XG, YG)
+      state(PIDM, none, L, XG, YG)
   end;
 
 
@@ -220,7 +219,7 @@ move(X, Y, W, H, XG, YG) ->
       end
   end.
 
-detect(PIDM, PIDS, X, Y, W, H, XG, YG) when PIDS =:= none ->
+detect(PIDM, none, X, Y, W, H, XG, YG) ->
   RefS = make_ref(),
   PIDM ! {g_pids, self(), RefS},
   receive
@@ -230,7 +229,7 @@ detect(PIDM, PIDS, X, Y, W, H, XG, YG) when PIDS =:= none ->
       io:format("~p: Ricevuto messaggio non previsto in risoluzione di PIDS: ~p~n", [self(), Msg]),
       self() ! Msg,
       % TODO: Is this tail recursion?
-      detect(PIDM, PIDS, X, Y, W, H, XG, YG)
+      detect(PIDM, none, X, Y, W, H, XG, YG)
   end;
 
 detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
@@ -264,7 +263,7 @@ detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
           % Parcheggio riuscito
             {parkOk, RefP} ->
               io:format("~p: Parcheggio riuscito~n", [self()]),
-              render ! {parked, self(), X, Y, 1}, % FIXME: CRASH HERE
+              render ! {parked, self(), X, Y, 1},
               sleep((rand:uniform(4) + 1) * 1000);
           % Parcheggio fallito
             {parkFailed, RefP} ->
