@@ -10,7 +10,7 @@
 -author("Balugani, Benetton, Crespan").
 
 %% API
--export([main/2, memory/3, state/5, detect/8, friendship/2]).
+-export([main/2, memory/3, state/5, detect/8, friendship/3]).
 
 sleep(N) ->
   receive
@@ -56,61 +56,64 @@ pingFriends([H | T]) ->
   end.
 
 % Case I have no friends
-friendship(PIDM, L) when length(L) =:= 0 ->
-  % Chiama WellKnown e fatti passare un contatto
-  RefD = make_ref(),
-  PIDM ! {g_pids, self(), RefD},
+friendship(PIDM, none, L) ->
+  RefM = make_ref(),
+  PIDM ! {g_pids, self(), RefM},
   receive
-    {get_pids, PIDS, RefD} ->
-      Ref2 = make_ref(),
-      wellknown ! {getFriends, self(), PIDS, Ref2},
-      receive
-        {myFriends, PIDLIST, Ref2} ->
-          List2 = [El || El <- PIDLIST, El =/= PIDS],
-          case List2 =:= [] of
-            true ->
-              % Non ho ricevuto nessun contatto, riprovo tra 2 secondi
+    {get_pids, PIDS, RefM} ->
+    friendship(PIDM, PIDS, L)
+  end;
 
-              % TODO: Random delay?
-              sleep(2000),
-              friendship(PIDM, L);
-            false ->
-              % Ho ricevuto un contatto, lo aggiungo alla lista
-              friendship(PIDM, [lists:nth(rand:uniform(length(List2)), List2)])
-          end
+friendship(PIDM, PIDS, L) when length(L) =:= 0 ->
+  % Chiama WellKnown e fatti passare un contatto
+  Ref = make_ref(),
+  wellknown ! {getFriends, self(), PIDS, Ref},
+  receive
+    {myFriends, PIDLIST, Ref} ->
+      List2 = [El || El <- PIDLIST, El =/= PIDS],
+      case List2 =:= [] of
+        true ->
+          % Non ho ricevuto nessun contatto, riprovo tra 2 secondi
+          sleep(2000),
+          friendship(PIDM, PIDS, L);
+        false ->
+          % Ho ricevuto un contatto, lo aggiungo alla lista
+          friendship(PIDM, PIDS, [lists:nth(rand:uniform(length(List2)), List2)])
       end
   end;
 % Case I have less than 5 friends
-friendship(PIDM, L) when length(L) < 5, length(L) > 0 ->
-  RefD = make_ref(),
-  PIDM ! {g_pids, self(), RefD},
-  receive
-    {get_pids, PIDS, RefD} ->
-      PIDLIST = lists:flatten(findFriends(PIDS, L)),
-      List2 = [El || El <- PIDLIST, El =/= PIDS],
-      Needed = 5 - length(L),
-      case length(List2) =:= Needed of
+friendship(PIDM, PIDS, L) when length(L) < 5, length(L) > 0 ->
+  PIDLIST = lists:flatten(findFriends(PIDS, L)),
+  % List2 contiene la lista di amici NON comuni e che NON includono se stessi e NON duplicati
+  List2 = sets:to_list(sets:from_list([El || El <- PIDLIST, El =/= PIDS , lists:member(El, L)=:=false])),
+  Needed = 5 - length(L),
+  case length(List2) =:= Needed of
+    true ->
+      friendship(PIDM, PIDS, [L, List2]);
+    false ->
+      case length(List2) =:= 0 of
         true ->
-          friendship(PIDM, [L, List2]);
+          % Non ho ricevuto nessun contatto, riprovo tra 2 secondi
+          sleep(2000),
+          friendship(PIDM,PIDS, L);
         false ->
-          case length(List2) =:= 0 of
-            true ->
-              % Non ho ricevuto nessun contatto, riprovo tra 2 secondi
-              sleep(2000),
-              friendship(PIDM, L);
+          % Prendi n elementi randomici dalla list
+          NewFriends = lists:flatten([L|pickFriends(List2, Needed)]),
+          case length(NewFriends) =:= 5 of
+            true -> pass;
             false ->
-              % Prendi n elementi randomici dalla list
-              NewFriends = lists:flatten([L, pickFriends(List2, Needed)]),
-              %TODO: Check if I already have them
-              %TODO: If they are less than Needed, resort to WellKnown
-              friendship(PIDM, NewFriends)
-          end
+              % TODO: Nel caso in cui gli amici non siano ancora abbastanza per colmare il vuoto, contattiamo wk oppure
+              % gli diamo una possibilità in più (sistema a counter, se dopo 3 tentativi la lista amici non si è
+              % ripopolata chiedi a wk)
+              not_implemented
+          end,
+          friendship(PIDM, PIDS,NewFriends)
       end
   end;
 % Case I already have 5 friends
-friendship(PIDM, L) ->
+friendship(PIDM, PIDS, L) ->
   sleep(2000),
-  friendship(PIDM, lists:flatten(pingFriends(L))).
+  friendship(PIDM, PIDS,lists:flatten(pingFriends(L))).
 
 state(PIDM, none, L, XG, YG) ->
   RefD = make_ref(),
@@ -351,9 +354,8 @@ main(W, H) ->
   PIDM ! {s_pids, PIDS},
   PIDD = spawn(?MODULE, detect, [PIDM, none, X, Y, W, H, XG, YG]),
   PIDM ! {s_pidd, PIDD},
-  %spawn(?MODULE, friendship, []),
-  PIDF = none,
-  %PIDM ! {s_pidf, PIDF},
+  PIDF = spawn(?MODULE, friendship, [PIDM, none, []]),
+  PIDM ! {s_pidf, PIDF},
   render ! {position, PIDD, X, Y},
   render ! {target, PIDD, XG, YG},
   io:format("~p: Generato detect(~p), state(~p), friendship(~p), memory(~p) ~n", [
