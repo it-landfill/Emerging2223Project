@@ -19,11 +19,11 @@ sleep(N) -> receive after N -> ok end.
 window(H, W, Elem, Friends, PrevData)->
   case Elem of
     null ->   wx:new(),
-      Frame = wxFrame:new(wx:null(), ?wxID_ANY, "Render"),
+      Frame = wxFrame:new(wx:null(), ?wxID_ANY, "Mappa"),
       Grid = wxGrid:new(Frame, 2, []),
       wxGrid:createGrid(Grid, H, W),
       wxFrame:show(Frame),
-      Frame2 = wxFrame:new(wx:null(), ?wxID_ANY, "Render2"),
+      Frame2 = wxFrame:new(wx:null(), ?wxID_ANY, "Amicizie"),
       FriendsNew = wxTextCtrl:new(Frame2, 1, [{value, "This is a single line wxTextCtrl"},
         {style, ?wxDEFAULT}]),
       wxFrame:show(Frame2);
