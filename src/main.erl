@@ -40,4 +40,8 @@ launch() ->
 
     io:format("~p: Spawning car~n", [self()]),
     C_PID = spawn(car, main, [W, H]),
-    io:format("~p: Car PID: ~p~n", [self(), C_PID]).
+    io:format("~p: Car PID: ~p~n", [self(), C_PID]),
+
+    io:format("~p: Spawning car~n", [self()]),
+    C2_PID = spawn(car, main, [W, H]),
+    io:format("~p: Car PID: ~p~n", [self(), C2_PID]).

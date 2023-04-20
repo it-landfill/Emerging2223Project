@@ -16,9 +16,9 @@ wellknown(L) ->
     receive
         {getFriends, PID1, PID2, Ref} ->
             PID1 ! {myFriends, L, Ref},
-            case lists:member(PID2, L) of
+            case lists:member({PID1, PID2}, L) of
                 true -> wellknown(L);
-                false -> wellknown([PID2 | L])
+                false -> wellknown([{PID1,PID2} | L])
             end
         %TODO: What if friends die?
     end.

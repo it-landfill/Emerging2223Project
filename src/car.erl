@@ -20,15 +20,15 @@ sleep(N) ->
 % Ask my friends for their friend list and use it to find new friends
 findFriends(_, []) ->
   [];
-findFriends(PIDS, [H | T]) ->
+findFriends(PIDS, [{PIDF, _} | T]) ->
   Ref = make_ref(),
-  % FIXME: H is a state PID!!!
-  H ! {getFriends, self(), PIDS, Ref},
+  % FIXME: H is a state PID!!!!!!!!!!!
+  PIDF ! {getFriends, self(), PIDS, Ref},
   receive
     {myFriends, L, Ref} ->
       [L | findFriends(PIDS, T)]
   after 2000 ->
-    io:format("~p: Friend ~p might be dead...~n", [self(), H]),
+    io:format("~p: Friend ~p might be dead...~n", [self(), PIDF]),
     findFriends(PIDS, T)
   end.
 
@@ -44,14 +44,14 @@ pickFriends(L, N) ->
 % Ping my friends and check if they are alive
 pingFriends([]) ->
   [];
-pingFriends([H | T]) ->
+pingFriends([{PIDF, _} | T]) ->
   Ref = make_ref(),
-  H ! {ping, self(), Ref},
+  PIDF ! {ping, self(), Ref},
   receive
     {pong, Ref} ->
-      [H | pingFriends(T)]
+      [PIDF | pingFriends(T)]
   after 2000 ->
-    io:format("~p: Friend ~p might be dead...~n", [self(), H]),
+    io:format("~p: Friend ~p might be dead...~n", [self(), PIDF]),
     pingFriends(T)
   end.
 
@@ -143,10 +143,6 @@ state(PIDM, PIDD, L, XG, YG) ->
   %% Comunica il nuovo goal a detect (eventualmente)
 
   io:format("~p: State~n", [self()]),
-
-  % ---- Resolve PIDD ----
-
-
   receive
     {status, X, Y, IsFree} ->
       case lists:member({X, Y, IsFree}, L) of
@@ -163,7 +159,6 @@ state(PIDM, PIDD, L, XG, YG) ->
             _ ->
               pass
           end,
-
           % TODO: gossip
           state(
             PIDM,
@@ -236,7 +231,6 @@ detect(PIDM, none, X, Y, W, H, XG, YG) ->
   end;
 
 detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
-  % TODO: implement detect
   % muovere l'automobile sulla scacchiera
   % interagendo con l'attore "ambient" per fare sensing dello stato di occupazione dei posteggi.
 
