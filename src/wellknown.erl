@@ -13,8 +13,10 @@
 -export([main/1, wellknown/1]).
 
 wellknown(L) ->
+    io:format("~p: WK conosce ~p~n", [self(),L]),
     receive
         {getFriends, PID1, PID2, Ref} ->
+            io:format("~p: WK riceve messaggio da ~p~n", [self(),PID1]),
             PID1 ! {myFriends, L, Ref},
             case lists:member({PID1, PID2}, L) of
                 true -> wellknown(L);

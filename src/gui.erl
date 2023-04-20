@@ -25,7 +25,7 @@ window(H, W, Elem, Friends, PrevData)->
       wxFrame:show(Frame),
       Frame2 = wxFrame:new(wx:null(), ?wxID_ANY, "Amicizie"),
       FriendsNew = wxTextCtrl:new(Frame2, 1, [{value, "This is a single line wxTextCtrl"},
-        {style, ?wxDEFAULT}]),
+        {style, ?wxDEFAULT bor ?wxTE_MULTILINE}]),
       wxFrame:show(Frame2);
     _ -> Grid = Elem, FriendsNew = Friends
   end,
