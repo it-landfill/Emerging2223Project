@@ -186,45 +186,54 @@ state(PIDM, PIDD, L, XG, YG) ->
       state(PIDM, PIDD, L, XG, YG)
   end.
 
+xmove(X, Y, W, XG) ->
+    case (X - XG) > (W div 2) of
+        true ->
+            case (X + 1) >= W of
+                true -> {0, Y};
+                false -> {X + 1, Y}
+            end;
+        false ->
+            case (X - 1) < 0 of
+                true -> {W - 1, Y};
+                false -> {X - 1, Y}
+            end
+    end.
+
+ymove(X, Y, H, YG) ->
+    case (Y - YG) > (H div 2) of
+        true ->
+            case (Y + 1) >= H of
+                true -> {X, 0};
+                false -> {X, Y + 1}
+            end;
+        false ->
+            case (Y - 1) < 0 of
+                true -> {X, H - 1};
+                false -> {X, Y - 1}
+            end
+    end.
+
 move(X, Y, W, H, XG, YG) ->
-  % ---- Move ----
-  % TODO: Pacman effect
-  case {X =:= XG, Y =:= YG} of
-    {true, true} ->
-      io:format("~p: Arrivato al goal~n", [self()]),
-      {X, Y};
-    {false, false} ->
-      case rand:uniform(2) of
-        1 ->
-          case Y > YG of
-            true ->
-              {X, (Y - 1) rem H};
-            false ->
-              {X, (Y + 1) rem H}
-          end;
-        2 ->
-          case X > XG of
-            true ->
-              {(X - 1) rem W, Y};
-            false ->
-              {(X + 1) rem W, Y}
-          end
-      end;
-    {true, false} ->
-      case Y > YG of
-        true ->
-          {X, (Y - 1) rem H};
-        false ->
-          {X, (Y + 1) rem H}
-      end;
-    {false, true} ->
-      case X > XG of
-        true ->
-          {(X - 1) rem W, Y};
-        false ->
-          {(X + 1) rem W, Y}
-      end
-  end.
+    % ---- Move ----
+    % TODO: Pacman effect
+    case {X =:= XG, Y =:= YG} of
+        {true, true} ->
+            io:format("~p: Arrivato al goal~n", [self()]),
+            {X, Y};
+        {false, false} ->
+            case rand:uniform(2) of
+                1 ->
+                    ymove(X, Y, H, YG);
+                2 ->
+                    xmove(X, Y, W, XG)
+            end;
+        {true, false} ->
+            ymove(X, Y, H, YG);
+        {false, true} ->
+            xmove(X, Y, W, XG)
+    end.
+
 
 detect(PIDM, none, X, Y, W, H, XG, YG) ->
   RefS = make_ref(),
