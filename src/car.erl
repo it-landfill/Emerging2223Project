@@ -187,31 +187,35 @@ state(PIDM, PIDD, L, XG, YG) ->
   end.
 
 xmove(X, Y, W, XG) ->
-    case (X - XG) > (W div 2) of
-        true ->
+    case {(X - XG) > (W div 2), X - XG > 0} of
+        {true, true} ->
             case (X + 1) >= W of
                 true -> {0, Y};
-                false -> {X + 1, Y}
+                false -> {(X + 1) rem W, Y}
             end;
-        false ->
+        {true, false} -> {(X - 1) rem W, Y};
+        {false, true} ->
             case (X - 1) < 0 of
                 true -> {W - 1, Y};
-                false -> {X - 1, Y}
-            end
+                false -> {(X - 1) rem W, Y}
+            end;
+        {false, false} -> {(X + 1) rem W, Y}
     end.
 
 ymove(X, Y, H, YG) ->
-    case (Y - YG) > (H div 2) of
-        true ->
+    case {(Y - YG) > (H div 2), Y - YG > 0} of
+        {true, true} ->
             case (Y + 1) >= H of
                 true -> {X, 0};
-                false -> {X, Y + 1}
+                false -> {X, (Y + 1) rem H}
             end;
-        false ->
+        {true, false} -> {X, (Y + 1) rem H};
+        {false, true} ->
             case (Y - 1) < 0 of
                 true -> {X, H - 1};
-                false -> {X, Y - 1}
-            end
+                false -> {X, (Y - 1) rem H}
+            end;
+        {false, false} -> {X, (Y + 1) rem H}
     end.
 
 move(X, Y, W, H, XG, YG) ->
