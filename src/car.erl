@@ -188,39 +188,22 @@ state(PIDM, PIDD, L, XG, YG) ->
 
 xmove(X, Y, W, XG) ->
     case {(X - XG) > (W div 2), X - XG > 0} of
-        {true, true} ->
-            case (X + 1) >= W of
-                true -> {0, Y};
-                false -> {(X + 1) rem W, Y}
-            end;
+        {true, true} -> {(X + 1) rem W, Y};
         {true, false} -> {(X - 1) rem W, Y};
-        {false, true} ->
-            case (X - 1) < 0 of
-                true -> {W - 1, Y};
-                false -> {(X - 1) rem W, Y}
-            end;
+        {false, true} -> {(X - 1) rem W, Y};
         {false, false} -> {(X + 1) rem W, Y}
     end.
 
 ymove(X, Y, H, YG) ->
     case {(Y - YG) > (H div 2), Y - YG > 0} of
-        {true, true} ->
-            case (Y + 1) >= H of
-                true -> {X, 0};
-                false -> {X, (Y + 1) rem H}
-            end;
-        {true, false} -> {X, (Y + 1) rem H};
-        {false, true} ->
-            case (Y - 1) < 0 of
-                true -> {X, H - 1};
-                false -> {X, (Y - 1) rem H}
-            end;
+        {true, true} -> {X, (Y + 1) rem H};
+        {true, false} -> {X, (Y - 1) rem H};
+        {false, true} -> {X, (Y - 1) rem H};
         {false, false} -> {X, (Y + 1) rem H}
     end.
 
 move(X, Y, W, H, XG, YG) ->
     % ---- Move ----
-    % TODO: Pacman effect
     case {X =:= XG, Y =:= YG} of
         {true, true} ->
             io:format("~p: Arrivato al goal~n", [self()]),
