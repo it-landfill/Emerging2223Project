@@ -20,7 +20,7 @@ sleep(N) ->
 % Ask my friends for their friend list and use it to find new friends
 findFriends(_, []) ->
   [];
-findFriends(PIDS, [{PIDF, _}=El | T]) ->
+findFriends(PIDS, [{PIDF, _} = El | T]) ->
   Ref = make_ref(),
   % FIXME: H is a state PID!!!!!!!!!!!
   PIDF ! {getFriends, self(), PIDS, Ref},
@@ -56,6 +56,35 @@ pingFriends([{PIDF, _} | T]) ->
     pingFriends(T)
   end.
 
+friendshipResponse(PIDM, PIDS, L, Ref) ->
+  receive
+    {getFriends, PIDFReceived, _, RefReceived} ->
+      % Se ho pochi amici potrei salvare anche da qui...
+      PIDFReceived ! {myFriends, L, RefReceived},
+      friendshipResponse(PIDM, PIDS, L, Ref);
+    {myFriends, PIDLIST, Ref} ->
+      % Come gestisco la Ref?
+      io:format("~p: ricevo da WK ~p ~n", [self(), PIDLIST]),
+      List2 = [El || {_, PIDSoth} = El <- PIDLIST, PIDSoth =/= PIDS],
+      case List2 =:= [] of
+        true ->
+          io:format("~p: non ho ricevuto nessuna risposta ~n", [self()]),
+          % Non ho ricevuto nessun contatto
+          friendshipResponse(PIDM, PIDS, L, none);
+        false ->
+          io:format("~p: Ha ricevuto risposta da WK~n", [self()]),
+          % Ho ricevuto un contatto, lo aggiungo alla lista
+          friendshipResponse(
+            PIDM, PIDS, [lists:nth(rand:uniform(length(List2)), List2)], none
+          )
+      end;
+    _ = Msg ->
+      io:format("~p: ricevo messaggio non standard: ~p ~n", [self(), Msg]),
+      friendshipResponse(PIDM, PIDS, L, Ref)
+  after 2000 ->
+    friendship(PIDM, PIDS, L)
+  end.
+
 % Case I have no friends
 friendship(PIDM, none, L) ->
   io:format("~p: Non ha amici e non conosce PIDS~n", [self()]),
@@ -63,66 +92,54 @@ friendship(PIDM, none, L) ->
   PIDM ! {g_pids, self(), RefM},
   receive
     {get_pids, PIDS, RefM} ->
-    friendship(PIDM, PIDS, L)
+      friendship(PIDM, PIDS, L)
   end;
-
 friendship(PIDM, PIDS, L) when length(L) =:= 0 ->
   % Chiama WellKnown e fatti passare un contatto
   io:format("~p: Ha come amici ~p ~n", [self(), L]),
   Ref = make_ref(),
   wellknown ! {getFriends, self(), PIDS, Ref},
-  receive
-    {myFriends, PIDLIST, Ref} ->
-      io:format("~p: ricevo da WK ~p ~n", [self(), PIDLIST]),
-      List2 = [El || {PIDF, PIDSoth}=El <- PIDLIST, PIDSoth =/= PIDS],
-      case List2 =:= [] of
-        true ->
-          io:format("~p: non ho ricevuto nessuna risposta ~n", [self()]),
-          % Non ho ricevuto nessun contatto, riprovo tra 2 secondi
-          sleep(2000),
-          friendship(PIDM, PIDS, L);
-        false ->
-          io:format("~p: Ha ricevuto risposta da WK~n", [self()]),
-          % Ho ricevuto un contatto, lo aggiungo alla lista
-          friendship(PIDM, PIDS, [lists:nth(rand:uniform(length(List2)), List2)])
-      end
-  end;
+  friendshipResponse(PIDM, PIDS, L, Ref);
 % Case I have less than 5 friends
 friendship(PIDM, PIDS, L) when length(L) < 5, length(L) > 0 ->
   io:format("~p: Ha come amici ~p ~n", [self(), L]),
   render ! {friends, PIDM, L},
   PIDLIST = lists:flatten(findFriends(PIDS, L)),
   % List2 contiene la lista di amici NON comuni e che NON includono se stessi e NON duplicati
-  List2 = sets:to_list(sets:from_list([El || {PIDF, PIDSoth}=El <- PIDLIST, PIDSoth =/= PIDS , lists:member(El, L)=:=false])),
+  List2 = sets:to_list(
+    sets:from_list([
+      El
+     || {_, PIDSoth} = El <- PIDLIST, PIDSoth =/= PIDS, lists:member(El, L) =:= false
+    ])
+  ),
   Needed = 5 - length(L),
   case length(List2) =:= Needed of
     true ->
-      friendship(PIDM, PIDS, [L, List2]);
+      friendshipResponse(PIDM, PIDS, [L, List2], none);
     false ->
       case length(List2) =:= 0 of
         true ->
-          % Non ho ricevuto nessun contatto, riprovo tra 2 secondi
-          sleep(2000),
-          friendship(PIDM,PIDS, L);
+          friendshipResponse(PIDM, PIDS, L, none);
         false ->
           % Prendi n elementi randomici dalla list
-          NewFriends = lists:flatten([L|pickFriends(List2, Needed)]),
+          NewFriends = lists:flatten([L | pickFriends(List2, Needed)]),
           case length(NewFriends) =:= 5 of
-            true -> pass;
+            true ->
+              pass;
             false ->
               % TODO: Nel caso in cui gli amici non siano ancora abbastanza per colmare il vuoto, contattiamo wk oppure
               % gli diamo una possibilità in più (sistema a counter, se dopo 3 tentativi la lista amici non si è
               % ripopolata chiedi a wk)
               not_implemented
           end,
-          friendship(PIDM, PIDS,NewFriends)
+          friendshipResponse(PIDM, PIDS, NewFriends, none)
       end
-  end;
+  end,
+  friendshipResponse(PIDM, PIDS, L, none);
 % Case I already have 5 friends
 friendship(PIDM, PIDS, L) ->
-  sleep(2000),
   render ! {friends, PIDM, L},
-  friendship(PIDM, PIDS,lists:flatten(pingFriends(L))).
+  friendshipResponse(PIDM, PIDS, lists:flatten(pingFriends(L)), none).
 
 state(PIDM, none, L, XG, YG) ->
   RefD = make_ref(),
@@ -135,8 +152,6 @@ state(PIDM, none, L, XG, YG) ->
       self() ! Msg,
       state(PIDM, none, L, XG, YG)
   end;
-
-
 state(PIDM, PIDD, L, XG, YG) ->
   % TODO: implement state
   % mantenere il modello interno dell'ambiente e le coordinate del posteggio obiettivo.
@@ -187,40 +202,39 @@ state(PIDM, PIDD, L, XG, YG) ->
   end.
 
 xmove(X, Y, W, XG) ->
-    case {(X - XG) > (W div 2), X - XG > 0} of
-        {true, true} -> {(X + 1) rem W, Y};
-        {true, false} -> {(X - 1) rem W, Y};
-        {false, true} -> {(X - 1) rem W, Y};
-        {false, false} -> {(X + 1) rem W, Y}
-    end.
+  case {(X - XG) > (W div 2), X - XG > 0} of
+    {true, true} -> {(X + 1) rem W, Y};
+    {true, false} -> {(X - 1) rem W, Y};
+    {false, true} -> {(X - 1) rem W, Y};
+    {false, false} -> {(X + 1) rem W, Y}
+  end.
 
 ymove(X, Y, H, YG) ->
-    case {(Y - YG) > (H div 2), Y - YG > 0} of
-        {true, true} -> {X, (Y + 1) rem H};
-        {true, false} -> {X, (Y - 1) rem H};
-        {false, true} -> {X, (Y - 1) rem H};
-        {false, false} -> {X, (Y + 1) rem H}
-    end.
+  case {(Y - YG) > (H div 2), Y - YG > 0} of
+    {true, true} -> {X, (Y + 1) rem H};
+    {true, false} -> {X, (Y - 1) rem H};
+    {false, true} -> {X, (Y - 1) rem H};
+    {false, false} -> {X, (Y + 1) rem H}
+  end.
 
 move(X, Y, W, H, XG, YG) ->
-    % ---- Move ----
-    case {X =:= XG, Y =:= YG} of
-        {true, true} ->
-            io:format("~p: Arrivato al goal~n", [self()]),
-            {X, Y};
-        {false, false} ->
-            case rand:uniform(2) of
-                1 ->
-                    ymove(X, Y, H, YG);
-                2 ->
-                    xmove(X, Y, W, XG)
-            end;
-        {true, false} ->
-            ymove(X, Y, H, YG);
-        {false, true} ->
-            xmove(X, Y, W, XG)
-    end.
-
+  % ---- Move ----
+  case {X =:= XG, Y =:= YG} of
+    {true, true} ->
+      io:format("~p: Arrivato al goal~n", [self()]),
+      {X, Y};
+    {false, false} ->
+      case rand:uniform(2) of
+        1 ->
+          ymove(X, Y, H, YG);
+        2 ->
+          xmove(X, Y, W, XG)
+      end;
+    {true, false} ->
+      ymove(X, Y, H, YG);
+    {false, true} ->
+      xmove(X, Y, W, XG)
+  end.
 
 detect(PIDM, none, X, Y, W, H, XG, YG) ->
   RefS = make_ref(),
@@ -234,7 +248,6 @@ detect(PIDM, none, X, Y, W, H, XG, YG) ->
       % TODO: Is this tail recursion?
       detect(PIDM, none, X, Y, W, H, XG, YG)
   end;
-
 detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
   % muovere l'automobile sulla scacchiera
   % interagendo con l'attore "ambient" per fare sensing dello stato di occupazione dei posteggi.
@@ -252,8 +265,7 @@ detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
   Ref = make_ref(),
   ambient ! {isFree, self(), X, Y, Ref},
   receive
-    {status, Ref, IsFree} = Ajeje ->
-      %io:format("~p: Resp ~p~n", [self(), Ajeje]),
+    {status, Ref, IsFree} ->
       PIDS ! {status, X, Y, IsFree},
 
       case {X =:= XG, Y =:= YG, IsFree} of
@@ -262,26 +274,26 @@ detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
           RefP = make_ref(),
           ambient ! {park, self(), X, Y, RefP},
           receive
-          % Parcheggio riuscito
+            % Parcheggio riuscito
             {parkOk, RefP} ->
               %io:format("~p: Parcheggio riuscito~n", [self()]),
               render ! {parked, PIDM, X, Y, 1},
               sleep((rand:uniform(4) + 1) * 1000);
-          % Parcheggio fallito
+            % Parcheggio fallito
             {parkFailed, RefP} ->
               io:format("~p: Parcheggio fallito~n", [self()])
-          % TODO: Time to die
+            % TODO: Time to die
           end,
           ambient ! {leave, self(), RefP},
           receive
-          % Parcheggio riuscito
+            % Parcheggio riuscito
             {leaveOk, RefP} ->
               %io:format("~p: Parcheggio liberato con successo~n", [self()]),
               render ! {parked, PIDM, X, Y, 0};
-          % Parcheggio fallito
+            % Parcheggio fallito
             {leaveFailed, RefP} ->
               io:format("~p: Errore in liberamento del parcheggio~n", [self()])
-          % TODO: Time to die
+            % TODO: Time to die
           end,
           self() ! {newGoal},
           detect(PIDM, PIDS, X, Y, W, H, XG, YG);
