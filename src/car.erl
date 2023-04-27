@@ -26,11 +26,11 @@ findFriends(PIDS, [{PIDF, _} = El | T]) ->
   PIDF ! {getFriends, self(), PIDS, Ref},
   receive
     {myFriends, L, Ref} ->
+      io:format("~p: FRIENDS: ~p, ~p~n", [self(), El, T]),
       [L | findFriends(PIDS, T)]
   after 2000 ->
-    io:format("~p: Friend ~p might be dead...~n", [self(), PIDF]),
-    %findFriends(PIDS, T)
-    [El | findFriends(PIDS, T)]
+    findFriends(PIDS, T)
+  %[El | findFriends(PIDS, T)]
   end.
 
 % Pick N random friends from a list
@@ -41,20 +41,6 @@ pickFriends([], _) ->
 pickFriends(L, N) ->
   Rand = lists:nth(rand:uniform(length(L)), L),
   [Rand | pickFriends([El || El <- L, El =/= Rand], N - 1)].
-
-% Ping my friends and check if they are alive
-pingFriends([]) ->
-  [];
-pingFriends([{PIDF, _} | T]) ->
-  Ref = make_ref(),
-  PIDF ! {ping, self(), Ref},
-  receive
-    {pong, Ref} ->
-      [PIDF | pingFriends(T)]
-  after 2000 ->
-    io:format("~p: Friend ~p might be dead...~n", [self(), PIDF]),
-    pingFriends(T)
-  end.
 
 friendshipResponse(PIDM, PIDS, L, Ref) ->
   receive
@@ -74,6 +60,8 @@ friendshipResponse(PIDM, PIDS, L, Ref) ->
         false ->
           io:format("FRIENDSHIP ~p: Ha ricevuto risposta da WK ~n", [self()]),
           % Ho ricevuto un contatto, lo aggiungo alla lista
+          FriendList = lists:flatten(pickFriends(List2, 5 - length(L))),
+          lists:foreach(fun({PIDF, _}) -> monitor(process, PIDF) end, FriendList),
           friendshipResponse(
             PIDM, PIDS, lists:flatten([FriendList | L]), none
           )
@@ -306,7 +294,6 @@ detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
     {newGoal} ->
       {NXG, NYG} = newCoordinates(W, H),
       %io:format("~p: Nuovo obiettivo: (~p,~p)~n", [self(), NXG, NYG]),
-      % TODO: Should I check if newGoal is free?
       PIDS ! {newGoal, NXG, NYG},
       render ! {target, PIDM, NXG, NYG},
       % Flush inbox
