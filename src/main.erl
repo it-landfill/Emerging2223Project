@@ -10,38 +10,36 @@
 -author("Balugani, Benetton, Crespan").
 
 %% API
--export([launch/0]).
+-export([launch/3]).
 
-launch() ->
-    io:format("~p: Launching main~n", [self()]),
-    W = 10,
-    H = 10,
+launch(Ncars, W, H) ->
+    io:format("SYS ~p: Launching main~n", [self()]),
 
-    io:format("~p: Spawning render~n", [self()]),
+    io:format("SYS ~p: Spawning render~n", [self()]),
     R_PID = spawn(render, main, [W, H, self()]),
     receive
         {renderOK} -> ok
     end,
-    io:format("~p: Render PID: ~p~n", [self(), R_PID]),
+    io:format("SYS ~p: Render PID: ~p~n", [self(), R_PID]),
 
-    io:format("~p: Spawning ambient~n", [self()]),
+    io:format("SYS ~p: Spawning ambient~n", [self()]),
     A_PID = spawn(ambient, main, [W, H, self()]),
     receive
         {ambientOK} -> ok
     end,
-    io:format("~p: Ambient PID: ~p~n", [self(), A_PID]),
+    io:format("SYS ~p: Ambient PID: ~p~n", [self(), A_PID]),
 
-    io:format("~p: Spawning wellknown~n", [self()]),
+    io:format("SYS ~p: Spawning wellknown~n", [self()]),
     W_PID = spawn(wellknown, main, [self()]),
     receive
         {wellknownOK} -> ok
     end,
-    io:format("~p: Wellknown PID: ~p~n", [self(), W_PID]),
+    io:format("SYS ~p: Wellknown PID: ~p~n", [self(), W_PID]),
 
-    io:format("~p: Spawning car~n", [self()]),
-    C_PID = spawn(car, main, [W, H]),
-    io:format("~p: Car PID: ~p~n", [self(), C_PID]),
+    L = lists:seq(1, Ncars),
 
-    io:format("~p: Spawning car~n", [self()]),
-    C2_PID = spawn(car, main, [W, H]),
-    io:format("~p: Car PID: ~p~n", [self(), C2_PID]).
+    lists:foreach(fun(_) ->
+        io:format("SYS ~p: Spawning car~n", [self()]),
+        C_PID = spawn(car, main, [W, H]),
+        io:format("SYS ~p: Car PID: ~p~n", [self(), C_PID]) end,
+        L).

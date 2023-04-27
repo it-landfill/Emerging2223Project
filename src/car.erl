@@ -20,9 +20,9 @@ sleep(N) ->
 % Ask my friends for their friend list and use it to find new friends
 findFriends(_, []) ->
   [];
+
 findFriends(PIDS, [{PIDF, _} = El | T]) ->
   Ref = make_ref(),
-  % FIXME: H is a state PID!!!!!!!!!!!
   PIDF ! {getFriends, self(), PIDS, Ref},
   receive
     {myFriends, L, Ref} ->
@@ -64,52 +64,56 @@ friendshipResponse(PIDM, PIDS, L, Ref) ->
       friendshipResponse(PIDM, PIDS, L, Ref);
     {myFriends, PIDLIST, Ref} ->
       % Come gestisco la Ref?
-      io:format("~p: ricevo da WK ~p ~n", [self(), PIDLIST]),
+      io:format("FRIENDSHIP ~p: ricevo da WK ~p ~n", [self(), PIDLIST]),
       List2 = [El || {_, PIDSoth} = El <- PIDLIST, PIDSoth =/= PIDS],
       case List2 =:= [] of
         true ->
-          io:format("~p: non ho ricevuto nessuna risposta ~n", [self()]),
+          io:format("FRIENDSHIP ~p: non ho ricevuto nessuna risposta ~n", [self()]),
           % Non ho ricevuto nessun contatto
           friendshipResponse(PIDM, PIDS, L, none);
         false ->
-          io:format("~p: Ha ricevuto risposta da WK~n", [self()]),
+          io:format("FRIENDSHIP ~p: Ha ricevuto risposta da WK ~n", [self()]),
           % Ho ricevuto un contatto, lo aggiungo alla lista
           friendshipResponse(
-            PIDM, PIDS, [lists:nth(rand:uniform(length(List2)), List2)], none
+            PIDM, PIDS, lists:flatten([FriendList | L]), none
           )
       end;
-    _ = Msg ->
-      io:format("~p: ricevo messaggio non standard: ~p ~n", [self(), Msg]),
-      friendshipResponse(PIDM, PIDS, L, Ref)
+    {'DOWN', _, _, PPID, Reason} ->
+      Alive = [El || {PIDF1, _} = El <- L, PPID =/= PIDF1],
+      io:format("FRIENDSHIP ~p: è morto l'amico ~p poichè ~p~n", [self(), PPID, Reason]),
+      friendshipResponse(PIDM, PIDS, Alive, Ref)
   after 2000 ->
     friendship(PIDM, PIDS, L)
   end.
 
 % Case I have no friends
 friendship(PIDM, none, L) ->
-  io:format("~p: Non ha amici e non conosce PIDS~n", [self()]),
+  io:format("FRIENDSHIP ~p: Non ha amici e non conosce PIDS~n", [self()]),
   RefM = make_ref(),
   PIDM ! {g_pids, self(), RefM},
   receive
     {get_pids, PIDS, RefM} ->
       friendship(PIDM, PIDS, L)
   end;
+
 friendship(PIDM, PIDS, L) when length(L) =:= 0 ->
   % Chiama WellKnown e fatti passare un contatto
-  io:format("~p: Ha come amici ~p ~n", [self(), L]),
+  io:format("FRIENDSHIP ~p: Ha come amici ~p ~n", [self(), L]),
   Ref = make_ref(),
   wellknown ! {getFriends, self(), PIDS, Ref},
   friendshipResponse(PIDM, PIDS, L, Ref);
+
 % Case I have less than 5 friends
 friendship(PIDM, PIDS, L) when length(L) < 5, length(L) > 0 ->
-  io:format("~p: Ha come amici ~p ~n", [self(), L]),
+  io:format("FRIENDSHIP ~p: Ha come amici ~p ~n", [self(), L]),
   render ! {friends, PIDM, L},
   PIDLIST = lists:flatten(findFriends(PIDS, L)),
+
   % List2 contiene la lista di amici NON comuni e che NON includono se stessi e NON duplicati
   List2 = sets:to_list(
     sets:from_list([
       El
-     || {_, PIDSoth} = El <- PIDLIST, PIDSoth =/= PIDS, lists:member(El, L) =:= false
+      || {_, PIDSoth} = El <- PIDLIST, PIDSoth =/= PIDS, lists:member(El, L) =:= false
     ])
   ),
   Needed = 5 - length(L),
@@ -122,7 +126,9 @@ friendship(PIDM, PIDS, L) when length(L) < 5, length(L) > 0 ->
           friendshipResponse(PIDM, PIDS, L, none);
         false ->
           % Prendi n elementi randomici dalla list
-          NewFriends = lists:flatten([L | pickFriends(List2, Needed)]),
+          NewFriends_tbm = lists:flatten(pickFriends(List2, Needed)),
+          lists:foreach(fun({PIDF, _}) -> monitor(process, PIDF) end, NewFriends_tbm),
+          NewFriends = lists:flatten([NewFriends_tbm | L]),
           case length(NewFriends) =:= 5 of
             true ->
               pass;
@@ -139,21 +145,16 @@ friendship(PIDM, PIDS, L) when length(L) < 5, length(L) > 0 ->
 % Case I already have 5 friends
 friendship(PIDM, PIDS, L) ->
   render ! {friends, PIDM, L},
-  friendshipResponse(PIDM, PIDS, lists:flatten(pingFriends(L)), none).
+  friendshipResponse(PIDM, PIDS, L, none).
 
 state(PIDM, none, L, XG, YG) ->
   RefD = make_ref(),
   PIDM ! {g_pidd, self(), RefD},
   receive
     {get_pidd, PIDD1, RefD} ->
-      state(PIDM, PIDD1, L, XG, YG);
-    _ = Msg ->
-      %io:format("~p: Ricevuto messaggio non previsto: ~p~n", [self(), Msg]),
-      self() ! Msg,
-      state(PIDM, none, L, XG, YG)
+      state(PIDM, PIDD1, L, XG, YG)
   end;
 state(PIDM, PIDD, L, XG, YG) ->
-  % TODO: implement state
   % mantenere il modello interno dell'ambiente e le coordinate del posteggio obiettivo.
   % registra per ogni cella l'ultima informazione giunta in suo possesso (posteggio libero/occupato/nessuna informazione)
   % propaga le nuove informazione ottenute agli amici (protocollo di gossiping).
@@ -165,8 +166,6 @@ state(PIDM, PIDD, L, XG, YG) ->
   % Aggiorna lo stato interno
   %% Aggiorna il goal (eventualmente)
   %% Comunica il nuovo goal a detect (eventualmente)
-
-  io:format("~p: State~n", [self()]),
   receive
     {status, X, Y, IsFree} ->
       case lists:member({X, Y, IsFree}, L) of
@@ -221,7 +220,7 @@ move(X, Y, W, H, XG, YG) ->
   % ---- Move ----
   case {X =:= XG, Y =:= YG} of
     {true, true} ->
-      io:format("~p: Arrivato al goal~n", [self()]),
+      io:format("DETECT ~p: Arrivato al goal~n", [self()]),
       {X, Y};
     {false, false} ->
       case rand:uniform(2) of
@@ -267,33 +266,33 @@ detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
   receive
     {status, Ref, IsFree} ->
       PIDS ! {status, X, Y, IsFree},
-
+      io:format("DETECT ~p: Status, ~p~n", [self(), {X =:= XG, Y =:= YG, IsFree}]),
       case {X =:= XG, Y =:= YG, IsFree} of
         % Sono al goal ed è libero
         {true, true, true} ->
           RefP = make_ref(),
           ambient ! {park, self(), X, Y, RefP},
           receive
-            % Parcheggio riuscito
+          % Parcheggio riuscito
             {parkOk, RefP} ->
-              %io:format("~p: Parcheggio riuscito~n", [self()]),
+              io:format("DETECT ~p: Parcheggio riuscito~n", [self()]),
               render ! {parked, PIDM, X, Y, 1},
               sleep((rand:uniform(4) + 1) * 1000);
-            % Parcheggio fallito
+          % Parcheggio fallito
             {parkFailed, RefP} ->
-              io:format("~p: Parcheggio fallito~n", [self()])
-            % TODO: Time to die
+              io:format("DETECT ~p: Parcheggio fallito~n", [self()]),
+              exit(park_busy)
           end,
           ambient ! {leave, self(), RefP},
           receive
-            % Parcheggio riuscito
+          % Parcheggio riuscito
             {leaveOk, RefP} ->
               %io:format("~p: Parcheggio liberato con successo~n", [self()]),
               render ! {parked, PIDM, X, Y, 0};
-            % Parcheggio fallito
+          % Parcheggio fallito
             {leaveFailed, RefP} ->
-              io:format("~p: Errore in liberamento del parcheggio~n", [self()])
-            % TODO: Time to die
+              io:format("DETECT ~p: Errore in liberamento del parcheggio~n", [self()])
+          % TODO: Time to die
           end,
           self() ! {newGoal},
           detect(PIDM, PIDS, X, Y, W, H, XG, YG);
@@ -313,12 +312,9 @@ detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
       % Flush inbox
       receive
         {status, _, _} = MsgFlush ->
-          io:format("~p: Flush msg ~p~n", [self(), MsgFlush])
+          io:format("DETECT ~p: Flush msg ~p~n", [self(), MsgFlush])
       end,
-      detect(PIDM, PIDS, X, Y, W, H, NXG, NYG);
-    _ = Msg1 ->
-      %io:format("~p: Ricevuto messaggio non previsto: ~p~n", [self(), Msg1]),
-      detect(PIDM, PIDS, X, Y, W, H, XG, YG)
+      detect(PIDM, PIDS, X, Y, W, H, NXG, NYG)
   end.
 
 memory(PIDS, PIDD, PIDF) ->
@@ -326,24 +322,27 @@ memory(PIDS, PIDD, PIDF) ->
   % disponibili a tutti i componenti del veicolo.
   receive
     {s_pids, Value} ->
-      io:format("~p: Ricevuto messaggio s_pids ~p~n", [self(), Value]),
+      io:format("MEM ~p: Ricevuto messaggio s_pids ~p~n", [self(), Value]),
+      link(Value),
       memory(Value, PIDD, PIDF);
     {s_pidd, Value} ->
-      io:format("~p: Ricevuto messaggio s_pidd ~p~n", [self(), Value]),
+      io:format("MEM ~p: Ricevuto messaggio s_pidd ~p~n", [self(), Value]),
+      link(Value),
       memory(PIDS, Value, PIDF);
     {s_pidf, Value} ->
-      io:format("~p: Ricevuto messaggio s_pidf ~p~n", [self(), Value]),
+      io:format("MEM ~p: Ricevuto messaggio s_pidf ~p~n", [self(), Value]),
+      link(Value),
       memory(PIDS, PIDD, Value);
     {g_pids, Pid, Ref} ->
-      io:format("~p: Ricevuto messaggio g_pids ~p~n", [self(), PIDS]),
+      io:format("MEM ~p: Ricevuto messaggio g_pids ~p~n", [self(), PIDS]),
       Pid ! {get_pids, PIDS, Ref},
       memory(PIDS, PIDD, PIDF);
     {g_pidd, Pid, Ref} ->
-      io:format("~p: Ricevuto messaggio g_pidd ~p~n", [self(), PIDD]),
+      io:format("MEM ~p: Ricevuto messaggio g_pidd ~p~n", [self(), PIDD]),
       Pid ! {get_pidd, PIDD, Ref},
       memory(PIDS, PIDD, PIDF);
     {g_pidf, Pid, Ref} ->
-      io:format("~p: Ricevuto messaggio g_pidf ~p~n", [self(), PIDF]),
+      io:format("MEM ~p: Ricevuto messaggio g_pidf ~p~n", [self(), PIDF]),
       Pid ! {get_pidf, PIDF, Ref},
       memory(PIDS, PIDD, PIDF)
   end.
@@ -354,11 +353,11 @@ newCoordinates(W, H) ->
 main(W, H) ->
   {X, Y} = newCoordinates(W, H),
   {XG, YG} = newCoordinates(W, H),
-  io:format("~p: Coordinate di partenza: ~p,~p~n", [self(), X, Y]),
-  io:format("~p: Target: ~p,~p~n", [self(), XG, YG]),
+  io:format("CAR ~p: Coordinate di partenza: ~p,~p~n", [self(), X, Y]),
+  io:format("CAR ~p: Target: ~p,~p~n", [self(), XG, YG]),
 
   % Spawn "DNS" actor
-  PIDM = spawn(?MODULE, memory, [none, none, none]),
+  {PIDM, MemRef} = spawn_monitor(?MODULE, memory, [none, none, none]),
 
   % Spawn actors
   PIDS = spawn(?MODULE, state, [PIDM, none, [], XG, YG]),
@@ -369,6 +368,13 @@ main(W, H) ->
   PIDM ! {s_pidf, PIDF},
   render ! {position, PIDM, X, Y},
   render ! {target, PIDM, XG, YG},
-  io:format("~p: Generato detect(~p), state(~p), friendship(~p), memory(~p) ~n", [
+  io:format("CAR ~p: Generato detect(~p), state(~p), friendship(~p), memory(~p) ~n", [
     self(), PIDD, PIDS, PIDF, PIDM
-  ]).
+  ]),
+  receive
+    {'DOWN', MemRef, _, PIDM, Reason} ->
+      io:format("CAR ~p: Something went wrong, restarting everything... ~n", [
+        self()]),
+      main(W, H)
+  end.
+

@@ -50,7 +50,7 @@ window(H, W, Elem, Friends, PrevData)->
         end
                    end,
         Data),
-      sleep(100),
+      sleep(50),
       window(H, W, Grid, FriendsNew, Data);
     _ -> window(H, W, Grid, FriendsNew, PrevData)
   end.

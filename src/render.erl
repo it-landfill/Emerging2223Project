@@ -19,7 +19,8 @@ render(Data) ->
     {position, PID, X, Y} ->
       case maps:find(PID, Data) of
         error ->
-          NData = maps:put(PID, [X, Y, 0, 0, 0, []], Data);
+          NData = maps:put(PID, [X, Y, 0, 0, 0, []], Data),
+          monitor(process, PID);
         _ ->
           Tmp = maps:get(PID, Data),
           NData = maps:update(PID, [X, Y, lists:nth(3, Tmp),
@@ -29,7 +30,8 @@ render(Data) ->
     {target, PID, X, Y} ->
       case maps:find(PID, Data) of
         error ->
-          NData = maps:put(PID, [0, 0, X, Y, 0, []], Data);
+          NData = maps:put(PID, [0, 0, X, Y, 0, []], Data),
+          monitor(process, PID);
         _ ->
           Tmp = maps:get(PID, Data),
           NData = maps:update(PID, [lists:nth(1, Tmp), lists:nth(2, Tmp),
@@ -39,7 +41,8 @@ render(Data) ->
     {parked, PID, X, Y, IsParked} ->
       case maps:find(PID, Data) of
         error ->
-          NData = maps:put(PID, [0, 0, X, Y, IsParked, []], Data);
+          NData = maps:put(PID, [0, 0, X, Y, IsParked, []], Data),
+          monitor(process, PID);
         _ ->
           Tmp = maps:get(PID, Data),
           NData = maps:update(PID, [lists:nth(1, Tmp), lists:nth(2, Tmp),
@@ -49,7 +52,8 @@ render(Data) ->
     {friends, PID, PIDLIST} ->
       case maps:find(PID, Data) of
         error ->
-          NData = maps:put(PID, [0, 0, 0, 0, 0, PIDLIST], Data);
+          NData = maps:put(PID, [0, 0, 0, 0, 0, PIDLIST], Data),
+          monitor(process, PID);
         _ ->
           Tmp = maps:get(PID, Data),
           NData = maps:update(PID, [lists:nth(1, Tmp), lists:nth(2, Tmp),
@@ -59,7 +63,9 @@ render(Data) ->
     {data, PID} ->
       % This call will be made by the window agent periodically
       PID ! {ok, Data},
-      render(Data)
+      render(Data);
+    {'DOWN', _, _, PPID, Reason} ->
+      render(maps:remove(PPID, Data))
   end.
 
 logger() ->
@@ -80,9 +86,9 @@ main() ->
 
 main(W, H, PIDMain) ->
   PID = spawn(?MODULE, render, [#{}]),
-  io:format("Creato render con ~p ~n", [PID]),
+  io:format("SYS Creato render con ~p ~n", [PID]),
   register(render, PID),
   spawn(gui, start, [W, H]),
-  io:format("Creato widget con ~n"),
+  io:format("SYS Creato widget con ~n"),
   PIDMain ! {renderOK}
 .

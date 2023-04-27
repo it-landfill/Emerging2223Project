@@ -13,16 +13,21 @@
 -export([main/1, wellknown/1]).
 
 wellknown(L) ->
-    io:format("~p: WK conosce ~p~n", [self(),L]),
+    io:format("WELLKNOWN ~p: WK conosce ~p~n", [self(),L]),
     receive
         {getFriends, PID1, PID2, Ref} ->
             io:format("~p: WK riceve messaggio da ~p~n", [self(),PID1]),
             PID1 ! {myFriends, L, Ref},
             case lists:member({PID1, PID2}, L) of
                 true -> wellknown(L);
-                false -> wellknown([{PID1,PID2} | L])
-            end
-        %TODO: What if friends die?
+                false ->
+                    monitor(process, PID1),
+                    wellknown([{PID1,PID2} | L])
+            end;
+        {'DOWN', _, _, PPID, Reason} ->
+            Alive = [El || {PIDF1, _} = El <- L, PPID =/= PIDF1],
+            io:format("WELLKNOWN ~p: è morto il veicolo ~p poichè ~p~n", [self(), PPID, Reason]),
+            wellknown(Alive)
     end.
 
 main(PIDMain) ->
