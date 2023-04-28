@@ -10,7 +10,19 @@
 -author("Balugani, Benetton, Crespan").
 
 %% API
--export([launch/3]).
+-export([launch/3, launch/0]).
+
+rebootCar(W, H) ->
+    receive
+    {'DOWN', _, _, C_PID, _} ->
+        io:format("SYS ~p: Car ~p died~n", [self(), C_PID]),
+        {C_PID_REBOOT, CarRef} = spawn_monitor(car, main, [W, H]),
+        rebootCar(W, H)
+    end.
+
+
+launch() ->
+    launch(2, 5, 5).
 
 launch(Ncars, W, H) ->
     io:format("SYS ~p: Launching main~n", [self()]),
@@ -40,6 +52,10 @@ launch(Ncars, W, H) ->
 
     lists:foreach(fun(_) ->
         io:format("SYS ~p: Spawning car~n", [self()]),
-        C_PID = spawn(car, main, [W, H]),
+        {C_PID, CarRef} = spawn_monitor(car, main, [W, H]),
         io:format("SYS ~p: Car PID: ~p~n", [self(), C_PID]) end,
-        L).
+        L),
+    rebootCar(W, H)
+    
+    .
+

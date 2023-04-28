@@ -331,7 +331,10 @@ memory(PIDS, PIDD, PIDF) ->
     {g_pidf, Pid, Ref} ->
       io:format("MEM ~p: Ricevuto messaggio g_pidf ~p~n", [self(), PIDF]),
       Pid ! {get_pidf, PIDF, Ref},
-      memory(PIDS, PIDD, PIDF)
+      memory(PIDS, PIDD, PIDF);
+    {die} ->
+      io:format("MEM ~p: Ricevuto messaggio die~n", [self()]),
+      exit(random_heart_attack)
   end.
 
 newCoordinates(W, H) ->
@@ -363,5 +366,10 @@ main(W, H) ->
       io:format("CAR ~p: Something went wrong, restarting everything... ~n", [
         self()]),
       main(W, H)
+    after rand:uniform(15000) ->
+      io:format("CAR ~p: Time to die... ~n", [self()]),
+      % KIll memory actor and exit
+      PIDM ! {die},
+      exit(random_heart_attack)
   end.
 
