@@ -15,6 +15,7 @@
 sleep(N) -> receive after N -> ok end.
 
 render(Data) ->
+  link(whereis(ambient)),
   receive
     {position, PID, X, Y} ->
       case maps:find(PID, Data) of
@@ -90,5 +91,6 @@ main(W, H, PIDMain) ->
   register(render, PID),
   spawn(gui, start, [W, H]),
   io:format("SYS Creato widget con ~n"),
+
   PIDMain ! {renderOK}
 .

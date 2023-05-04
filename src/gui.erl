@@ -17,6 +17,7 @@ sleep(N) -> receive after N -> ok end.
 
 
 window(H, W, Elem, Friends, PrevData)->
+  link(whereis(render)),
   case Elem of
     null ->   wx:new(),
       Frame = wxFrame:new(wx:null(), ?wxID_ANY, "Mappa"),
@@ -58,4 +59,5 @@ window(H, W, Elem, Friends, PrevData)->
 
 
 start(H,W) ->
+
   spawn(?MODULE, window, [H, W, null, null, #{}]).

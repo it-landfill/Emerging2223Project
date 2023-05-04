@@ -21,6 +21,7 @@ ambient(A) ->
             ambient(A);
         {park, PID, X, Y, Ref} ->
             io:format("AMBIENT ~p: Parcheggio ~p (~p,~p) | ~p~n", [self(), PID, X, Y, Ref]),
+            %TODO: chiedere al prof. Coen come gestire il caso in cui una macchina muoia e occupi il parcheggio. E' necessario memorizzare anche il PID della macchina?
             case lists:member({X, Y, free}, A) of
                 true ->
                     PID ! {parkOk, Ref},

@@ -13,6 +13,7 @@
 -export([main/1, wellknown/1]).
 
 wellknown(L) ->
+    link(whereis(ambient)),
     io:format("WELLKNOWN ~p: WK conosce ~p~n", [self(),L]),
     receive
         {getFriends, PID1, PID2, Ref} ->

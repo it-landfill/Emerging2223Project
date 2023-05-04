@@ -361,12 +361,16 @@ main(W, H) ->
   io:format("CAR ~p: Generato detect(~p), state(~p), friendship(~p), memory(~p) ~n", [
     self(), PIDD, PIDS, PIDF, PIDM
   ]),
+  ARef = monitor(process, ambient),
   receive
+    {'DOWN', ARef, _, ambient, Reason} ->
+      io:format("CAR ~p: We polluted too much and the ambient is now really sad...", [self()]),
+      exit(normal);
     {'DOWN', MemRef, _, PIDM, Reason} ->
       io:format("CAR ~p: Something went wrong, restarting everything... ~n", [
         self()]),
       main(W, H)
-    after rand:uniform(15000) ->
+    after rand:uniform(15000)+15000 ->
       io:format("CAR ~p: Time to die... ~n", [self()]),
       % KIll memory actor and exit
       PIDM ! {die},
