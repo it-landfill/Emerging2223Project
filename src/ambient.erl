@@ -13,7 +13,6 @@
 -export([main/3, ambient/1]).
 
 ambient(A) ->
-    io:format("AMBIENT ~p: Status ~p ~n", [self(), A]),
     receive
         {isFree, PID, X, Y, Ref} ->
             io:format("AMBIENT ~p: Richiedo ~p (~p,~p) | ~p~n", [self(), PID, X, Y, Ref]),

@@ -10,7 +10,7 @@
 -author("Balugani, Benetton, Crespan").
 
 %% API
--export([main/2, memory/3, state/5, detect/8, friendship/3]).
+-export([main/2, memory/3, state/6, detect/8, friendship/3]).
 
 sleep(N) ->
   receive
@@ -47,6 +47,10 @@ friendshipResponse(PIDM, PIDS, L, Ref) ->
     {getFriends, PIDFReceived, _, RefReceived} ->
       % Se ho pochi amici potrei salvare anche da qui...
       PIDFReceived ! {myFriends, L, RefReceived},
+      friendshipResponse(PIDM, PIDS, L, Ref);
+    {insiderFriends, PIDReceived, RefReceived} ->
+      % Internal use only with state actor
+      PIDReceived ! {myFriends, L, RefReceived},
       friendshipResponse(PIDM, PIDS, L, Ref);
     {myFriends, PIDLIST, Ref} ->
       % Come gestisco la Ref?
@@ -135,57 +139,61 @@ friendship(PIDM, PIDS, L) ->
   render ! {friends, PIDM, L},
   friendshipResponse(PIDM, PIDS, L, none).
 
-state(PIDM, none, L, XG, YG) ->
+do_gossip(X, Y, IsFree, PIDF) ->
+  Ref = make_ref(),
+  PIDF ! {insiderFriends, self(), Ref},
+  receive
+    {myFriends, L, Ref} ->
+      lists:foreach(fun({_, PIDS}) ->
+        io:format("GOSP ~p: Invio infomazioni a: ~p~n", [self(), PIDS]),
+        PIDS ! {notifyStatus, X, Y, IsFree}
+                    end, L)
+  end.
+
+spatial_check(L, X, Y, XG, YG, IsFree, PIDD) ->
+  case lists:member({X, Y, IsFree}, L) of
+    true ->
+      % No news, we already new that...
+      L;
+    false ->
+      % New news, we need to gossip
+      % ---- Check if message concerns goal ----
+      case {X =:= XG, Y =:= YG, IsFree} of
+        {true, true, false} ->
+          % ---- Goal is now occupied ----
+          PIDD ! {newGoal};
+        _ ->
+          pass
+      end,
+      [{X, Y, isFree} | [El || {Xi, Yi, _} = El <- L, Xi =/= X, Yi =/= Y]]
+  end.
+
+state(PIDM, none, none, L, XG, YG) ->
   RefD = make_ref(),
   PIDM ! {g_pidd, self(), RefD},
   receive
     {get_pidd, PIDD1, RefD} ->
-      state(PIDM, PIDD1, L, XG, YG)
+      RefF = make_ref(),
+      PIDM ! {g_pidf, self(), RefF},
+      receive
+        {get_pidf, PIDF1, RefF} ->
+          state(PIDM, PIDD1, PIDF1, L, XG, YG)
+      end
   end;
-state(PIDM, PIDD, L, XG, YG) ->
-  % mantenere il modello interno dell'ambiente e le coordinate del posteggio obiettivo.
-  % registra per ogni cella l'ultima informazione giunta in suo possesso (posteggio libero/occupato/nessuna informazione)
-  % propaga le nuove informazione ottenute agli amici (protocollo di gossiping).
-  % cambia il posteggio obiettivo quando necessario (es. quando scopre che il posteggio è ora occupato).
-
-  % Riceve dal detect lo stato della cella attuale
-  % Inoltra lo stato a friendship
-  % Riceve dal friendship gli stati delle altre celle
-  % Aggiorna lo stato interno
-  %% Aggiorna il goal (eventualmente)
-  %% Comunica il nuovo goal a detect (eventualmente)
+state(PIDM, PIDD, PIDF, L, XG, YG) ->
   receive
+    {notifyStatus, X, Y, IsFree} ->
+      LNew = spatial_check(L, X, Y, XG, YG, IsFree, PIDD),
+      io:format("STATE ~p: Ricevute informazioni via gossip su: ~p,~p, ~p~n", [self(), X, Y,IsFree]),
+      % Il gossip è da fare anche qui?
+      state(PIDM, PIDD, PIDF, LNew, XG, YG);
     {status, X, Y, IsFree} ->
-      case lists:member({X, Y, IsFree}, L) of
-        true ->
-          % No news, we already new that...
-          state(PIDM, PIDD, L, XG, YG);
-        false ->
-          % New news, we need to gossip
-          % ---- Check if message concerns goal ----
-          case {X =:= XG, Y =:= YG, IsFree} of
-            {true, true, false} ->
-              % ---- Goal is now occupied ----
-              PIDD ! {newGoal};
-            _ ->
-              pass
-          end,
-          % TODO: gossip
-          state(
-            PIDM,
-            PIDD,
-            [
-              {X, Y, isFree} | [El || {Xi, Yi, _} = El <- L, Xi =/= X, Yi =/= Y]
-            ],
-            XG,
-            YG
-          )
-      end;
+      LNew = spatial_check(L, X, Y, XG, YG, IsFree, PIDD),
+      do_gossip(X, Y, IsFree, PIDF),
+      io:format("STATE ~p: Ricevute informazioni via detect su: ~p,~p, ~p~n", [self(), X, Y,IsFree]),
+      state(PIDM, PIDD, PIDF, LNew, XG, YG);
     {newGoal, X, Y} ->
-      state(PIDM, PIDD, L, X, Y);
-    _ ->
-      %io:format("~p: Ricevuto messaggio non previsto~n", [self()]),
-      state(PIDM, PIDD, L, XG, YG)
+      state(PIDM, PIDD, PIDF, L, X, Y)
   end.
 
 xmove(X, Y, W, XG) ->
@@ -350,7 +358,7 @@ main(W, H) ->
   {PIDM, MemRef} = spawn_monitor(?MODULE, memory, [none, none, none]),
 
   % Spawn actors
-  PIDS = spawn(?MODULE, state, [PIDM, none, [], XG, YG]),
+  PIDS = spawn(?MODULE, state, [PIDM, none, none, [], XG, YG]),
   PIDM ! {s_pids, PIDS},
   PIDD = spawn(?MODULE, detect, [PIDM, none, X, Y, W, H, XG, YG]),
   PIDM ! {s_pidd, PIDD},
@@ -370,10 +378,10 @@ main(W, H) ->
       io:format("CAR ~p: Something went wrong, restarting everything... ~n", [
         self()]),
       main(W, H)
-    after rand:uniform(15000)+15000 ->
-      io:format("CAR ~p: Time to die... ~n", [self()]),
-      % KIll memory actor and exit
-      PIDM ! {die},
-      exit(random_heart_attack)
+  after rand:uniform(15000) + 15000 ->
+    io:format("CAR ~p: Time to die... ~n", [self()]),
+    % KIll memory actor and exit
+    PIDM ! {die},
+    exit(random_heart_attack)
   end.
 
