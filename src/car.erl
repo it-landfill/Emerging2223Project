@@ -27,7 +27,7 @@ findFriends(PIDS, [{PIDF, _} = El | T]) ->
   receive
     {myFriends, L, Ref} ->
       io:format("~p: FRIENDS: ~p, ~p~n", [self(), El, T]),
-      [L | findFriends(PIDS, T)]
+      L ++ findFriends(PIDS, T)
   after 2000 ->
     findFriends(PIDS, T)
   %[El | findFriends(PIDS, T)]
@@ -64,7 +64,7 @@ friendshipResponse(PIDM, PIDS, L, Ref) ->
         false ->
           io:format("FRIENDSHIP ~p: Ha ricevuto risposta da WK ~n", [self()]),
           % Ho ricevuto un contatto, lo aggiungo alla lista
-          FriendList = lists:flatten(pickFriends(List2, 5 - length(L))),
+          FriendList = pickFriends(List2, 5 - length(L)),
           lists:foreach(fun({PIDF, _}) -> monitor(process, PIDF) end, FriendList),
           friendshipResponse(
             PIDM, PIDS, FriendList ++ L, none
@@ -91,7 +91,7 @@ friendship(PIDM, none, L) ->
 friendship(PIDM, PIDS, L) when length(L) < 5 ->
   io:format("FRIENDSHIP ~p: Ha come amici ~p ~n", [self(), L]),
   render ! {friends, PIDM, L},
-  PIDLIST = lists:flatten(findFriends(PIDS, L)),
+  PIDLIST = findFriends(PIDS, L),
 
   % List2 contiene la lista di amici NON comuni e che NON includono se stessi e NON duplicati
   List2 = sets:to_list(
@@ -108,7 +108,7 @@ friendship(PIDM, PIDS, L) when length(L) < 5 ->
       case length(List2) > Needed of
         true ->
           % Prendi n elementi randomici dalla list
-          NewFriends_tbm = lists:flatten(pickFriends(List2, Needed)),
+          NewFriends_tbm = pickFriends(List2, Needed),
           lists:foreach(fun({PIDF, _}) -> monitor(process, PIDF) end, NewFriends_tbm),
           NewFriends = NewFriends_tbm ++ L,
           friendshipResponse(PIDM, PIDS, NewFriends, none);
