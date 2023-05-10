@@ -27,7 +27,7 @@ findFriends(PIDS, [{PIDF, _} = El | T]) ->
   receive
     {myFriends, L, Ref} ->
       io:format("~p: FRIENDS: ~p, ~p~n", [self(), El, T]),
-      [L | findFriends(PIDS, T)]
+      L ++ findFriends(PIDS, T)
   after 2000 ->
     findFriends(PIDS, T)
   %[El | findFriends(PIDS, T)]
@@ -58,16 +58,16 @@ friendshipResponse(PIDM, PIDS, L, Ref) ->
       List2 = [El || {_, PIDSoth} = El <- PIDLIST, PIDSoth =/= PIDS],
       case List2 =:= [] of
         true ->
-          io:format("FRIENDSHIP ~p: non ho ricevuto nessuna risposta ~n", [self()]),
+          io:format("FRIENDSHIP ~p: non ho ricevuto nessun amico ~n", [self()]),
           % Non ho ricevuto nessun contatto
           friendshipResponse(PIDM, PIDS, L, none);
         false ->
           io:format("FRIENDSHIP ~p: Ha ricevuto risposta da WK ~n", [self()]),
           % Ho ricevuto un contatto, lo aggiungo alla lista
-          FriendList = lists:flatten(pickFriends(List2, 5 - length(L))),
+          FriendList = pickFriends(List2, 5 - length(L)),
           lists:foreach(fun({PIDF, _}) -> monitor(process, PIDF) end, FriendList),
           friendshipResponse(
-            PIDM, PIDS, lists:flatten([FriendList | L]), none
+            PIDM, PIDS, FriendList ++ L, none
           )
       end;
     {'DOWN', _, _, PPID, Reason} ->
@@ -78,7 +78,6 @@ friendshipResponse(PIDM, PIDS, L, Ref) ->
     friendship(PIDM, PIDS, L)
   end.
 
-% Case I have no friends
 friendship(PIDM, none, L) ->
   io:format("FRIENDSHIP ~p: Non ha amici e non conosce PIDS~n", [self()]),
   RefM = make_ref(),
@@ -88,18 +87,11 @@ friendship(PIDM, none, L) ->
       friendship(PIDM, PIDS, L)
   end;
 
-friendship(PIDM, PIDS, L) when length(L) =:= 0 ->
-  % Chiama WellKnown e fatti passare un contatto
-  io:format("FRIENDSHIP ~p: Ha come amici ~p ~n", [self(), L]),
-  Ref = make_ref(),
-  wellknown ! {getFriends, self(), PIDS, Ref},
-  friendshipResponse(PIDM, PIDS, L, Ref);
-
 % Case I have less than 5 friends
-friendship(PIDM, PIDS, L) when length(L) < 5, length(L) > 0 ->
+friendship(PIDM, PIDS, L) when length(L) < 5 ->
   io:format("FRIENDSHIP ~p: Ha come amici ~p ~n", [self(), L]),
   render ! {friends, PIDM, L},
-  PIDLIST = lists:flatten(findFriends(PIDS, L)),
+  PIDLIST = findFriends(PIDS, L),
 
   % List2 contiene la lista di amici NON comuni e che NON includono se stessi e NON duplicati
   List2 = sets:to_list(
@@ -111,26 +103,21 @@ friendship(PIDM, PIDS, L) when length(L) < 5, length(L) > 0 ->
   Needed = 5 - length(L),
   case length(List2) =:= Needed of
     true ->
-      friendshipResponse(PIDM, PIDS, [L, List2], none);
+      friendshipResponse(PIDM, PIDS, L ++ List2, none);
     false ->
-      case length(List2) =:= 0 of
+      case length(List2) > Needed of
         true ->
-          friendshipResponse(PIDM, PIDS, L, none);
-        false ->
           % Prendi n elementi randomici dalla list
-          NewFriends_tbm = lists:flatten(pickFriends(List2, Needed)),
+          NewFriends_tbm = pickFriends(List2, Needed),
           lists:foreach(fun({PIDF, _}) -> monitor(process, PIDF) end, NewFriends_tbm),
-          NewFriends = lists:flatten([NewFriends_tbm | L]),
-          case length(NewFriends) =:= 5 of
-            true ->
-              pass;
-            false ->
-              % TODO: Nel caso in cui gli amici non siano ancora abbastanza per colmare il vuoto, contattiamo wk oppure
-              % gli diamo una possibilità in più (sistema a counter, se dopo 3 tentativi la lista amici non si è
-              % ripopolata chiedi a wk)
-              not_implemented
-          end,
-          friendshipResponse(PIDM, PIDS, NewFriends, none)
+          NewFriends = NewFriends_tbm ++ L,
+          friendshipResponse(PIDM, PIDS, NewFriends, none);
+        false ->
+			% Chiama WellKnown e fatti passare i contatti
+			lists:foreach(fun({PIDF, _}) -> monitor(process, PIDF) end, List2),
+			RefWK = make_ref(),
+			wellknown ! {getFriends, self(), PIDS, RefWK},
+			friendshipResponse(PIDM, PIDS, L ++ List2, RefWK)
       end
   end,
   friendshipResponse(PIDM, PIDS, L, none);
@@ -372,11 +359,10 @@ main(W, H) ->
   ARef = monitor(process, ambient),
   receive
     {'DOWN', ARef, _, ambient, Reason} ->
-      io:format("CAR ~p: We polluted too much and the ambient is now really sad...", [self()]),
+      io:format("CAR ~p: We polluted too much and the ambient is now really sad... ~p~n", [self(), Reason]),
       exit(normal);
     {'DOWN', MemRef, _, PIDM, Reason} ->
-      io:format("CAR ~p: Something went wrong, restarting everything... ~n", [
-        self()]),
+      io:format("CAR ~p: Something went wrong, restarting everything... ~p~n", [self(), Reason]),
       main(W, H)
   after rand:uniform(15000) + 15000 ->
     io:format("CAR ~p: Time to die... ~n", [self()]),

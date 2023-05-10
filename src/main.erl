@@ -16,7 +16,7 @@ rebootCar(W, H) ->
   receive
     {'DOWN', _, _, ambient, _} ->
       io:format("SYS Ambient is too polluted. Killing everything..."),
-      bye-bye;
+      byebye;
     {'DOWN', _, _, C_PID, _} ->
       io:format("SYS ~p: Car ~p died~n", [self(), C_PID]),
       {C_PID_REBOOT, CarRef} = spawn_monitor(car, main, [W, H]),
