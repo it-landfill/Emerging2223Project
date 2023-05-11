@@ -13,8 +13,9 @@
 -export([launch/3, launch/0]).
 
 rebootCar(W, H) ->
+  A_PID = whereis(ambient),
   receive
-    {'DOWN', _, _, ambient, _} ->
+    {'DOWN', _, _, A_PID, _}->
       io:format("SYS Ambient is too polluted. Killing everything..."),
       byebye;
     {'DOWN', _, _, C_PID, _} ->
@@ -25,17 +26,17 @@ rebootCar(W, H) ->
 
 
 launch() ->
-  launch(2, 5, 5).
+  launch(5, 5, 5).
 
 launch(Ncars, W, H) ->
   io:format("SYS ~p: Launching main~n", [self()]),
 
   io:format("SYS ~p: Spawning ambient~n", [self()]),
-  {A_PID, _} = spawn_monitor(ambient, main, [W, H, self()]),
+  _ = spawn(ambient, main, [W, H, self()]),
   receive
-    {ambientOK} -> ok
+    {ambientOK} -> monitor(process, whereis(ambient))
   end,
-  io:format("SYS ~p: Ambient PID: ~p~n", [self(), A_PID]),
+  io:format("SYS ~p: Ambient PID: ~p~n", [self(), ambient]),
 
   io:format("SYS ~p: Spawning render~n", [self()]),
   R_PID = spawn(render, main, [W, H, self()]),

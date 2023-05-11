@@ -54,6 +54,7 @@ ambient(A) ->
                 {X, Y, Ref, MRef, CARPID} ->
                     ambient([{X, Y, free, none, none} | A -- [Elem]]);
                 false ->
+                    % How did you get here?
                     io:format("AMBIENT ~p: Auto ~p è morta, ma il posteggio era gia' stato liberato...? ~p ~p~n",[self(), PID, Elem, A]),
                     ambient(A)
             end
