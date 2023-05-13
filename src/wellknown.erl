@@ -14,10 +14,10 @@
 
 wellknown(L) ->
     link(whereis(ambient)),
-    io:format("WELLKNOWN ~p: WK conosce ~p~n", [self(),L]),
+    % io:format("WELLKNOWN ~p: WK conosce ~p~n", [self(),L]),
     receive
         {getFriends, PID1, PID2, Ref} ->
-            io:format("~p: WK riceve messaggio da ~p~n", [self(),PID1]),
+            % io:format("~p: WK riceve messaggio da ~p~n", [self(),PID1]),
             PID1 ! {myFriends, L, Ref},
             case lists:member({PID1, PID2}, L) of
                 true -> wellknown(L);
@@ -27,7 +27,7 @@ wellknown(L) ->
             end;
         {'DOWN', _, _, PPID, Reason} ->
             Alive = [El || {PIDF1, _} = El <- L, PPID =/= PIDF1],
-            io:format("WELLKNOWN ~p: è morto il veicolo ~p poichè ~p~n", [self(), PPID, Reason]),
+            % io:format("WELLKNOWN ~p: è morto il veicolo ~p poichè ~p~n", [self(), PPID, Reason]),
             wellknown(Alive)
     end.
 

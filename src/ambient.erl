@@ -15,11 +15,11 @@
 ambient(A) ->
     receive
         {isFree, PID, X, Y, Ref} ->
-            io:format("AMBIENT ~p: Richiedo ~p (~p,~p) | ~p~n", [self(), PID, X, Y, Ref]),
+            % io:format("AMBIENT ~p: Richiedo ~p (~p,~p) | ~p~n", [self(), PID, X, Y, Ref]),
             PID ! {status, Ref, lists:member({X, Y, free, none, none}, A)},
             ambient(A);
         {park, PID, X, Y, Ref} ->
-            io:format("AMBIENT ~p: Parcheggio ~p (~p,~p) | ~p~n", [self(), PID, X, Y, Ref]),
+            % io:format("AMBIENT ~p: Parcheggio ~p (~p,~p) | ~p~n", [self(), PID, X, Y, Ref]),
             %TODO: chiedere al prof. Coen come gestire il caso in cui una macchina muoia e occupi il parcheggio. E' necessario memorizzare anche il PID della macchina?
             case lists:member({X, Y, free, none, none}, A) of
                 true ->
@@ -36,7 +36,7 @@ ambient(A) ->
             Elem = lists:keyfind(Ref, 3, A),
             case Elem of
                 {X, Y, Ref, MRef, CARPID} ->
-                    io:format("AMBIENT ~p: Libero ~p (~p,~p) | ~p~n", [self(), PID, X, Y, Ref]),
+                    % io:format("AMBIENT ~p: Libero ~p (~p,~p) | ~p~n", [self(), PID, X, Y, Ref]),
                     PID ! {leaveOk, Ref},
                     demonitor(MRef),
                     ambient([{X, Y, free, none, none} | A -- [Elem]]);
@@ -55,7 +55,7 @@ ambient(A) ->
                     ambient([{X, Y, free, none, none} | A -- [Elem]]);
                 false ->
                     % How did you get here?
-                    io:format("AMBIENT ~p: Auto ~p è morta, ma il posteggio era gia' stato liberato...? ~p ~p~n",[self(), PID, Elem, A]),
+                    % io:format("AMBIENT ~p: Auto ~p è morta, ma il posteggio era gia' stato liberato...? ~p ~p~n",[self(), PID, Elem, A]),
                     ambient(A)
             end
     end.
