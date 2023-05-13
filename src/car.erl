@@ -42,6 +42,13 @@ pickFriends(L, N) ->
   Rand = lists:nth(rand:uniform(length(L)), L),
   [Rand | pickFriends([El || El <- L, El =/= Rand], N - 1)].
 
+keepNewItems(L, PIDS, NewLst) ->
+	sets:to_list(
+		sets:from_list([
+			El || {_, PIDSoth} = El <- NewLst, PIDSoth =/= PIDS, lists:member(El, L) =:= false
+		])
+	).
+
 friendshipResponse(PIDM, PIDS, L, Ref) ->
   receive
     {getFriends, PIDFReceived, _, RefReceived} ->
@@ -53,9 +60,8 @@ friendshipResponse(PIDM, PIDS, L, Ref) ->
       PIDReceived ! {myFriends, L, RefReceived},
       friendshipResponse(PIDM, PIDS, L, Ref);
     {myFriends, PIDLIST, Ref} ->
-      % Come gestisco la Ref?
       % io:format("FRIENDSHIP ~p: ricevo da WK ~p ~n", [self(), PIDLIST]),
-      List2 = [El || {_, PIDSoth} = El <- PIDLIST, PIDSoth =/= PIDS],
+	  List2 = keepNewItems(L, PIDS, PIDLIST),
       case List2 =:= [] of
         true ->
           % io:format("FRIENDSHIP ~p: non ho ricevuto nessun amico ~n", [self()]),
@@ -94,12 +100,7 @@ friendship(PIDM, PIDS, L) when length(L) < 5 ->
   PIDLIST = findFriends(PIDS, L),
 
   % List2 contiene la lista di amici NON comuni e che NON includono se stessi e NON duplicati
-  List2 = sets:to_list(
-    sets:from_list([
-      El
-      || {_, PIDSoth} = El <- PIDLIST, PIDSoth =/= PIDS, lists:member(El, L) =:= false
-    ])
-  ),
+  List2 = keepNewItems(L, PIDS, PIDLIST),
   Needed = 5 - length(L),
   case length(List2) =:= Needed of
     true ->

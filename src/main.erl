@@ -26,7 +26,7 @@ rebootCar(W, H) ->
 
 
 launch() ->
-  launch(5, 5, 5).
+  launch(10, 10, 10).
 
 launch(Ncars, W, H) ->
   io:format("SYS ~p: Launching main~n", [self()]),
