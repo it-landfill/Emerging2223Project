@@ -78,7 +78,7 @@ friendshipResponse(PIDM, PIDS, L, Ref) ->
       end;
     {'DOWN', _, _, PPID, Reason} ->
       Alive = [El || {PIDF1, _} = El <- L, PPID =/= PIDF1],
-      % io:format("FRIENDSHIP ~p: è morto l'amico ~p poichè ~p~n", [self(), PPID, Reason]),
+      % io:format("FRIENDSHIP ~p: e' morto l'amico ~p poichè ~p~n", [self(), PPID, Reason]),
       friendshipResponse(PIDM, PIDS, Alive, Ref)
   after 2000 ->
     friendship(PIDM, PIDS, L)
@@ -176,7 +176,12 @@ state(PIDM, PIDD, PIDF, L, XG, YG) ->
       state(PIDM, PIDD, PIDF, LNew, XG, YG);
     {status, X, Y, IsFree} ->
       LNew = spatial_check(L, X, Y, XG, YG, IsFree, PIDD),
-      do_gossip(X, Y, IsFree, PIDF),
+      case L =:= LNew of
+        false ->
+          do_gossip(X, Y, IsFree, PIDF);
+        true ->
+          pass
+      end,
       % io:format("STATE ~p: Ricevute informazioni via detect su: ~p,~p, ~p~n", [self(), X, Y,IsFree]),
       state(PIDM, PIDD, PIDF, LNew, XG, YG);
     {newGoal, X, Y} ->
@@ -268,14 +273,14 @@ detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
           end,
           ambient ! {leave, self(), RefP},
           receive
-          % Parcheggio riuscito
+          % Ripartenza riuscita
             {leaveOk, RefP} ->
               %% io:format("~p: Parcheggio liberato con successo~n", [self()]),
               render ! {parked, PIDM, X, Y, 0};
-          % Parcheggio fallito
+            % Ripartenza fallita (questa situazione non dovrebbe mai verificarsi)
             {leaveFailed, RefP} ->
-            io:format("DETECT ~p: Errore in liberamento del parcheggio~n", [self()])
-          % TODO: Time to die
+              io:format("DETECT ~p: Errore in liberamento del parcheggio~n", [self()]),
+              exit(leave_failed)
           end,
           self() ! {newGoal},
           detect(PIDM, PIDS, X, Y, W, H, XG, YG);

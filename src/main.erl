@@ -10,7 +10,7 @@
 -author("Balugani, Benetton, Crespan").
 
 %% API
--export([launch/3, launch/0]).
+-export([launch/3, main/0]).
 
 rebootCar(W, H) ->
   A_PID = whereis(ambient),
@@ -20,12 +20,12 @@ rebootCar(W, H) ->
       byebye;
     {'DOWN', _, _, C_PID, _} ->
       % io:format("SYS ~p: Car ~p died~n", [self(), C_PID]),
-      {C_PID_REBOOT, CarRef} = spawn_monitor(car, main, [W, H]),
+      spawn_monitor(car, main, [W, H]),
       rebootCar(W, H)
   end.
 
 
-launch() ->
+main() ->
   launch(10, 10, 10).
 
 launch(Ncars, W, H) ->

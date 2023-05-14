@@ -35,23 +35,22 @@ ambient(A) ->
             % Finds in the list A the touple that has as third element Ref.
             Elem = lists:keyfind(Ref, 3, A),
             case Elem of
-                {X, Y, Ref, MRef, CARPID} ->
+                {X, Y, Ref, MRef, _} ->
                     % io:format("AMBIENT ~p: Libero ~p (~p,~p) | ~p~n", [self(), PID, X, Y, Ref]),
                     PID ! {leaveOk, Ref},
                     demonitor(MRef),
                     ambient([{X, Y, free, none, none} | A -- [Elem]]);
                 false ->
-                    % How did you get here?
-                    % TODO: Gotta kill em all
+                    % This code should not be reachable. However, here it lays.
                     PID ! {leaveFailed, Ref}
             end,
             ambient(A);
-        {'DOWN', MRef, _, PID, Reason} ->
+        {'DOWN', MRef, _, PID, _} ->
             Elem = lists:keyfind(PID, 5, A),
-            io:format("AMBIENT ~p: Auto ~p è morta, libero il posteggio... ~n",[self(), PID]),
+            io:format("AMBIENT ~p: Auto ~p e' morta, libero il posteggio... ~n",[self(), PID]),
             % Is this proper?
             case Elem of
-                {X, Y, Ref, MRef, CARPID} ->
+                {X, Y, _, MRef, _} ->
                     ambient([{X, Y, free, none, none} | A -- [Elem]]);
                 false ->
                     % How did you get here?
