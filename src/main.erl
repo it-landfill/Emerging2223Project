@@ -13,9 +13,10 @@
 -export([launch/3, main/0]).
 
 rebootCar(W, H) ->
+  % Rimane in ascolto per crash dell'ambient e delle macchine.
   A_PID = whereis(ambient),
   receive
-    {'DOWN', _, _, A_PID, _}->
+    {'DOWN', _, _, A_PID, _} ->
       io:format("SYS Ambient is too polluted. Killing everything..."),
       byebye;
     {'DOWN', _, _, C_PID, _} ->
@@ -26,42 +27,43 @@ rebootCar(W, H) ->
 
 
 main() ->
+  % Main dell'applicazione, crea una griglia 10*10 con 10 macchine.
   launch(10, 10, 10).
 
 launch(Ncars, W, H) ->
+  % Launcher del progetto. Avvia l'ambient, wellknown e state, per poi creare le macchine.
   io:format("SYS ~p: Launching main~n", [self()]),
 
   io:format("SYS ~p: Spawning ambient~n", [self()]),
-  _ = spawn(ambient, main, [W, H, self()]),
+  spawn(ambient, main, [W, H, self()]),
   receive
     {ambientOK} -> monitor(process, whereis(ambient))
   end,
-  io:format("SYS ~p: Ambient PID: ~p~n", [self(), ambient]),
+  io:format("SYS ~p: Ambient PID: ~p~n", [self(), whereis(ambient)]),
 
   io:format("SYS ~p: Spawning render~n", [self()]),
-  R_PID = spawn(render, main, [W, H, self()]),
+  spawn(render, main, [W, H, self()]),
   receive
     {renderOK} -> ok
   end,
-  io:format("SYS ~p: Render PID: ~p~n", [self(), R_PID]),
+  io:format("SYS ~p: Render PID: ~p~n", [self(), whereis(render)]),
 
   io:format("SYS ~p: Spawning wellknown~n", [self()]),
-  W_PID = spawn(wellknown, main, [self()]),
+  spawn(wellknown, main, [self()]),
   receive
     {wellknownOK} -> ok
   end,
-  io:format("SYS ~p: Wellknown PID: ~p~n", [self(), W_PID]),
+  io:format("SYS ~p: Wellknown PID: ~p~n", [self(), whereis(wellknown)]),
 
   L = lists:seq(1, Ncars),
 
+  % Nella nostra implementazione, sono le macchine a autodistruggersi dopo un dato lasso di tempo. Di conseguenza
+  % non è necessario memorizzare alcuna lista di pid.
   lists:foreach(fun(_) ->
     io:format("SYS ~p: Spawning car~n", [self()]),
-    {C_PID, CarRef} = spawn_monitor(car, main, [W, H]),
+    {C_PID, _} = spawn_monitor(car, main, [W, H]),
     io:format("SYS ~p: Car PID: ~p~n", [self(), C_PID]) end,
     L),
-  % Nel caso in cui sia necessario che sia il main stesso a uccidere le macchinine, basta tenere conto delle macchine
-  % che vengono spawnate, metterle in una lista e passarla a reboot car. Questa lista andrà aggiornata per mantenere
-  % l'esatta lista delle macchinine attive, in modo da poter inviare loro segnali di uccisione quando necessario.
   rebootCar(W, H),
   launch(Ncars, W, H)
 .

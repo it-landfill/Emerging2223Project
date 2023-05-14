@@ -13,6 +13,7 @@
 -export([main/1, wellknown/1]).
 
 wellknown(L) ->
+    % Server wellknown, linkato ad ambient in quanto elemento vitale del sistema.
     link(whereis(ambient)),
     % io:format("WELLKNOWN ~p: WK conosce ~p~n", [self(),L]),
     receive
@@ -32,6 +33,7 @@ wellknown(L) ->
     end.
 
 main(PIDMain) ->
+    % Lancio del server wellknown
     Pid = spawn(?MODULE, wellknown, [[]]),
     register(wellknown, Pid),
     PIDMain ! {wellknownOK}.

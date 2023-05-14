@@ -13,6 +13,7 @@
 -export([main/3, ambient/1]).
 
 ambient(A) ->
+    % Server ambient.
     receive
         {isFree, PID, X, Y, Ref} ->
             % io:format("AMBIENT ~p: Richiedo ~p (~p,~p) | ~p~n", [self(), PID, X, Y, Ref]),
@@ -20,7 +21,6 @@ ambient(A) ->
             ambient(A);
         {park, PID, X, Y, Ref} ->
             % io:format("AMBIENT ~p: Parcheggio ~p (~p,~p) | ~p~n", [self(), PID, X, Y, Ref]),
-            %TODO: chiedere al prof. Coen come gestire il caso in cui una macchina muoia e occupi il parcheggio. E' necessario memorizzare anche il PID della macchina?
             case lists:member({X, Y, free, none, none}, A) of
                 true ->
                     PID ! {parkOk, Ref},
@@ -32,7 +32,7 @@ ambient(A) ->
                     ambient(A)
             end;
         {leave, PID, Ref} ->
-            % Finds in the list A the touple that has as third element Ref.
+            % Trova nella lista A l'elemento che ha la Ref desiderata.
             Elem = lists:keyfind(Ref, 3, A),
             case Elem of
                 {X, Y, Ref, MRef, _} ->
@@ -41,7 +41,7 @@ ambient(A) ->
                     demonitor(MRef),
                     ambient([{X, Y, free, none, none} | A -- [Elem]]);
                 false ->
-                    % This code should not be reachable. However, here it lays.
+                    % Questo codice non dovrebbe essere raggiungibile.
                     PID ! {leaveFailed, Ref}
             end,
             ambient(A);
@@ -53,7 +53,7 @@ ambient(A) ->
                 {X, Y, _, MRef, _} ->
                     ambient([{X, Y, free, none, none} | A -- [Elem]]);
                 false ->
-                    % How did you get here?
+                    % Questo codice non dovrebbe essere raggiungibile.
                     % io:format("AMBIENT ~p: Auto ~p è morta, ma il posteggio era gia' stato liberato...? ~p ~p~n",[self(), PID, Elem, A]),
                     ambient(A)
             end

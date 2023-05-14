@@ -15,6 +15,8 @@
 sleep(N) -> receive after N -> ok end.
 
 render(Data) ->
+  % Server render, raccoglie i dati provenienti da automobili e li mantiene in memoria, per poi restituirli
+  % agli attori di visualizzazione (logger oppure gui). E' linkato a ambient in quanto elemento vitale del sistema.
   link(whereis(ambient)),
   receive
     {position, PID, X, Y} ->
@@ -62,14 +64,16 @@ render(Data) ->
       end,
       render(NData);
     {data, PID} ->
-      % This call will be made by the window agent periodically
+      % Chiamata per la lettura da parte degli attori di visualizzazione dei dati di render
       PID ! {ok, Data},
       render(Data);
-    {'DOWN', _, _, PPID, Reason} ->
+    {'DOWN', _, _, PPID, _} ->
+      % Nel caso in cui un attore muoia, i suoi dati vengono rimossi.
       render(maps:remove(PPID, Data))
   end.
 
 logger() ->
+  % Logger base che restituisce i dati di render.
   sleep(10000),
   io:format("Updating...~n"),
   render ! {data, self()},
@@ -80,17 +84,18 @@ logger() ->
   end.
 
 main() ->
+  % Main per lo spawn del logger
   PID = spawn(?MODULE, render, [#{}]),
   io:format("Creato render con ~p ~n", [PID]),
-  register(render, PID).
-  %spawn(?MODULE, logger, []).
+  register(render, PID),
+  spawn(?MODULE, logger, []).
 
 main(W, H, PIDMain) ->
+  % Main per lo spawn della gui
   PID = spawn(?MODULE, render, [#{}]),
-  io:format("SYS Creato render con ~p ~n", [PID]),
+  io:format("SYS Creato render con ~p~n", [PID]),
   register(render, PID),
-  spawn(gui, start, [W, H]),
-  io:format("SYS Creato widget con ~n"),
-
+  GPID = spawn(gui, start, [W, H]),
+  io:format("SYS Creato widget con ~p~n", [GPID]),
   PIDMain ! {renderOK}
 .

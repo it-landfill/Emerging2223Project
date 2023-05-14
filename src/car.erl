@@ -17,7 +17,7 @@ sleep(N) ->
   after N -> ok
   end.
 
-% Ask my friends for their friend list and use it to find new friends
+% Chiede agli amici la lista degli amici
 findFriends(_, []) ->
   [];
 
@@ -30,10 +30,9 @@ findFriends(PIDS, [{PIDF, _} = El | T]) ->
       L ++ findFriends(PIDS, T)
   after 2000 ->
     findFriends(PIDS, T)
-  %[El | findFriends(PIDS, T)]
   end.
 
-% Pick N random friends from a list
+% Prende N amici da una lista in modo casuale
 pickFriends(_, 0) ->
   [];
 pickFriends([], _) ->
@@ -41,27 +40,26 @@ pickFriends([], _) ->
 pickFriends(L, N) ->
   Rand = lists:nth(rand:uniform(length(L)), L),
   [Rand | pickFriends([El || El <- L, El =/= Rand], N - 1)].
-
+% Funzione che elimina i duplicati dalla lista newlist tutti gli elementi presenti in s e che non contengono PIDS
 keepNewItems(L, PIDS, NewLst) ->
-	sets:to_list(
-		sets:from_list([
-			El || {_, PIDSoth} = El <- NewLst, PIDSoth =/= PIDS, lists:member(El, L) =:= false
-		])
-	).
-
+  sets:to_list(
+    sets:from_list([
+      El || {_, PIDSoth} = El <- NewLst, PIDSoth =/= PIDS, lists:member(El, L) =:= false
+    ])
+  ).
+% Funzione comune per la gestione delle richieste legate all'amicizia
 friendshipResponse(PIDM, PIDS, L, Ref) ->
   receive
     {getFriends, PIDFReceived, _, RefReceived} ->
-      % Se ho pochi amici potrei salvare anche da qui...
       PIDFReceived ! {myFriends, L, RefReceived},
       friendshipResponse(PIDM, PIDS, L, Ref);
     {insiderFriends, PIDReceived, RefReceived} ->
-      % Internal use only with state actor
+      % Per uso interno da parte di state
       PIDReceived ! {myFriends, L, RefReceived},
       friendshipResponse(PIDM, PIDS, L, Ref);
     {myFriends, PIDLIST, Ref} ->
       % io:format("FRIENDSHIP ~p: ricevo da WK ~p ~n", [self(), PIDLIST]),
-	  List2 = keepNewItems(L, PIDS, PIDLIST),
+      List2 = keepNewItems(L, PIDS, PIDLIST),
       case List2 =:= [] of
         true ->
           % io:format("FRIENDSHIP ~p: non ho ricevuto nessun amico ~n", [self()]),
@@ -81,9 +79,10 @@ friendshipResponse(PIDM, PIDS, L, Ref) ->
       % io:format("FRIENDSHIP ~p: e' morto l'amico ~p poichè ~p~n", [self(), PPID, Reason]),
       friendshipResponse(PIDM, PIDS, Alive, Ref)
   after 2000 ->
-    friendship(PIDM, PIDS, L)
+    L
   end.
 
+% Funzione per effettuare caching ed evitare di subissare di richieste Memory
 friendship(PIDM, none, L) ->
   % io:format("FRIENDSHIP ~p: Non ha amici e non conosce PIDS~n", [self()]),
   RefM = make_ref(),
@@ -93,7 +92,7 @@ friendship(PIDM, none, L) ->
       friendship(PIDM, PIDS, L)
   end;
 
-% Case I have less than 5 friends
+% Se ho meno di 5 amici (ma non 0)
 friendship(PIDM, PIDS, L) when length(L) < 5 ->
   % io:format("FRIENDSHIP ~p: Ha come amici ~p ~n", [self(), L]),
   render ! {friends, PIDM, L},
@@ -112,22 +111,28 @@ friendship(PIDM, PIDS, L) when length(L) < 5 ->
           NewFriends_tbm = pickFriends(List2, Needed),
           lists:foreach(fun({PIDF, _}) -> monitor(process, PIDF) end, NewFriends_tbm),
           NewFriends = NewFriends_tbm ++ L,
-          friendshipResponse(PIDM, PIDS, NewFriends, none);
+          Ln = friendshipResponse(PIDM, PIDS, NewFriends, none),
+          friendship(PIDM, PIDS, Ln);
         false ->
-			% Chiama WellKnown e fatti passare i contatti
-			lists:foreach(fun({PIDF, _}) -> monitor(process, PIDF) end, List2),
-			RefWK = make_ref(),
-			wellknown ! {getFriends, self(), PIDS, RefWK},
-			friendshipResponse(PIDM, PIDS, L ++ List2, RefWK)
+          % Chiama WellKnown e fatti passare i contatti se non hai ancora abbastanza amici
+          lists:foreach(fun({PIDF, _}) -> monitor(process, PIDF) end, List2),
+          RefWK = make_ref(),
+          wellknown ! {getFriends, self(), PIDS, RefWK},
+          Ln = friendshipResponse(PIDM, PIDS, L ++ List2, RefWK),
+          friendship(PIDM, PIDS, Ln)
       end
   end,
-  friendshipResponse(PIDM, PIDS, L, none);
-% Case I already have 5 friends
+  Ln1 = friendshipResponse(PIDM, PIDS, L, none),
+  friendship(PIDM, PIDS, Ln1);
+
+% Ho già 5 amici, li devo mantenere
 friendship(PIDM, PIDS, L) ->
   render ! {friends, PIDM, L},
-  friendshipResponse(PIDM, PIDS, L, none).
+  Ln = friendshipResponse(PIDM, PIDS, L, none),
+  friendship(PIDM, PIDS, Ln).
 
 do_gossip(X, Y, IsFree, PIDF) ->
+  % Esegue il gossip dopo aver ottenuto la lista amici
   Ref = make_ref(),
   PIDF ! {insiderFriends, self(), Ref},
   receive
@@ -139,6 +144,8 @@ do_gossip(X, Y, IsFree, PIDF) ->
   end.
 
 spatial_check(L, X, Y, XG, YG, IsFree, PIDD) ->
+  % Aggiorna la rappresentazione interna, e se si rende conto che il goal è occupato procede a richiedere un nuovo
+  % obiettivo.
   case lists:member({X, Y, IsFree}, L) of
     true ->
       % No news, we already new that...
@@ -157,6 +164,7 @@ spatial_check(L, X, Y, XG, YG, IsFree, PIDD) ->
   end.
 
 state(PIDM, none, none, L, XG, YG) ->
+  % State non conosce il PIDD e PIDF, quindi li chiede per fare caching
   RefD = make_ref(),
   PIDM ! {g_pidd, self(), RefD},
   receive
@@ -169,6 +177,7 @@ state(PIDM, none, none, L, XG, YG) ->
       end
   end;
 state(PIDM, PIDD, PIDF, L, XG, YG) ->
+  % Loop dell'agente state
   receive
     {notifyStatus, X, Y, IsFree} ->
       LNew = spatial_check(L, X, Y, XG, YG, IsFree, PIDD),
@@ -176,6 +185,7 @@ state(PIDM, PIDD, PIDF, L, XG, YG) ->
       state(PIDM, PIDD, PIDF, LNew, XG, YG);
     {status, X, Y, IsFree} ->
       LNew = spatial_check(L, X, Y, XG, YG, IsFree, PIDD),
+      % Se le due liste sono diverse (ci sono novità) allora manda la nuova informazione
       case L =:= LNew of
         false ->
           do_gossip(X, Y, IsFree, PIDF);
@@ -189,6 +199,7 @@ state(PIDM, PIDD, PIDF, L, XG, YG) ->
   end.
 
 xmove(X, Y, W, XG) ->
+  % Movimento sull'asse X
   case {(X - XG) > (W div 2), X - XG > 0} of
     {true, true} -> {(X + 1) rem W, Y};
     {true, false} -> {(X - 1) rem W, Y};
@@ -197,6 +208,7 @@ xmove(X, Y, W, XG) ->
   end.
 
 ymove(X, Y, H, YG) ->
+  % Movimento sull'asse Y
   case {(Y - YG) > (H div 2), Y - YG > 0} of
     {true, true} -> {X, (Y + 1) rem H};
     {true, false} -> {X, (Y - 1) rem H};
@@ -224,6 +236,7 @@ move(X, Y, W, H, XG, YG) ->
   end.
 
 detect(PIDM, none, X, Y, W, H, XG, YG) ->
+  % Detect non conosce PIDS
   RefS = make_ref(),
   PIDM ! {g_pids, self(), RefS},
   receive
@@ -232,9 +245,9 @@ detect(PIDM, none, X, Y, W, H, XG, YG) ->
     _ = Msg ->
       %% io:format("~p: Ricevuto messaggio non previsto in risoluzione di PIDS: ~p~n", [self(), Msg]),
       self() ! Msg,
-      % TODO: Is this tail recursion?
       detect(PIDM, none, X, Y, W, H, XG, YG)
   end;
+
 detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
   % muovere l'automobile sulla scacchiera
   % interagendo con l'attore "ambient" per fare sensing dello stato di occupazione dei posteggi.
@@ -277,7 +290,7 @@ detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
             {leaveOk, RefP} ->
               %% io:format("~p: Parcheggio liberato con successo~n", [self()]),
               render ! {parked, PIDM, X, Y, 0};
-            % Ripartenza fallita (questa situazione non dovrebbe mai verificarsi)
+          % Ripartenza fallita (questa situazione non dovrebbe mai verificarsi)
             {leaveFailed, RefP} ->
               io:format("DETECT ~p: Errore in liberamento del parcheggio~n", [self()]),
               exit(leave_failed)
@@ -299,8 +312,8 @@ detect(PIDM, PIDS, X, Y, W, H, XG, YG) ->
       % Flush inbox
       receive
         {status, _, _} = MsgFlush ->
-			pass
-          % io:format("DETECT ~p: Flush msg ~p~n", [self(), MsgFlush])
+          pass
+      % io:format("DETECT ~p: Flush msg ~p~n", [self(), MsgFlush])
       end,
       detect(PIDM, PIDS, X, Y, W, H, NXG, NYG)
   end.
