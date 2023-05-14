@@ -29,7 +29,7 @@ compile: ${MODS:%=%.beam}
 ## run an application from the makefile
 
 launch: all 
-	${ERL}  -s main launch 
+	${ERL}  -s main main 
 
 # remove all the code
 
